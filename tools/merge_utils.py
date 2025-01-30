@@ -11,12 +11,13 @@ logger = logging.getLogger(__name__)
 
 class Merge:
     @staticmethod
-    def _normalize_mp3_file(input_file, output_file, sample_rate=44100, bitrate='192k'):
+    def _normalize_mp3_file(input_file, output_file, sample_rate=44100, bitrate='192k', channels=2):
         command = [
             'ffmpeg',
             '-i', input_file,
             '-ar', str(sample_rate),
             '-ab', bitrate,
+            '-ac', str(channels),
             '-c:a', 'libmp3lame',
             output_file
         ]
@@ -41,7 +42,8 @@ class Merge:
         return merged
 
     @staticmethod
-    def normalize_mp3_file_parallel(files: list, merged_folder: str, sample_rate=44100, bitrate='192k') -> list:
+    def normalize_mp3_file_parallel(files: list, merged_folder: str, sample_rate=44100, bitrate='192k',
+                                    channels=2) -> list:
         normalized_files = [None] * len(files)
         with ThreadPoolExecutor() as executor:
             futures = []
@@ -52,7 +54,8 @@ class Merge:
                     file,
                     normalized_file,
                     sample_rate,
-                    bitrate
+                    bitrate,
+                    channels
                 ))
                 futures[-1].file_index = idx
             for future in as_completed(futures):
