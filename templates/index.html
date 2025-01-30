@@ -29,76 +29,75 @@
     <p class="mt-2">Merging files, please wait...</p>
 </div>
 <script>
-    document.getElementById('mergeForm').addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const form = document.getElementById('mergeForm');
-    const formData = new FormData(form);
-    const loadingContainer = document.getElementById('loadingContainer');
-    const resultContainer = document.getElementById('result');
-    const submitButton = form.querySelector('button[type="submit"]');
-    const inputs = form.querySelectorAll('input, button');
-    loadingContainer.classList.remove('d-none');
-    resultContainer.innerHTML = '';
-    inputs.forEach(input => input.disabled = true);
+    document.addEventListener('DOMContentLoaded', () => {
+        const form = document.getElementById('mergeForm');
+        const loadingContainer = document.getElementById('loadingContainer');
+        const resultContainer = document.getElementById('result');
+        const filesInput = document.getElementById('files');
+        const countInput = document.getElementById('count');
 
-    try {
-        const response = await fetch('/merge', {
-            method: 'POST',
-            body: formData,
+        form.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const formData = new FormData(form);
+            const inputs = form.querySelectorAll('input, button');
+            loadingContainer.classList.remove('d-none');
+            resultContainer.innerHTML = '';
+            inputs.forEach(input => input.disabled = true);
+
+            try {
+                const response = await fetch('/merge', {
+                    method: 'POST',
+                    body: formData,
+                });
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    loadingContainer.classList.add('d-none');
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = 'merged_files.zip';
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                    resultContainer.innerHTML = '<div class="alert alert-success">Files merged successfully!</div>';
+                } else {
+                    const result = await response.json();
+                    resultContainer.innerHTML = `<div class="alert alert-danger">Error: ${result.error || 'An error occurred'}</div>`;
+                }
+            } catch (error) {
+                resultContainer.innerHTML = `<div class="alert alert-danger">Connection error: ${error.message}</div>`;
+            } finally {
+                loadingContainer.classList.add('d-none');
+                inputs.forEach(input => input.disabled = false);
+            }
         });
 
-        if (response.ok) {
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            loadingContainer.classList.add('d-none');
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = 'merged_files.zip'; // Имя архива
-            document.body.appendChild(link);
-            link.click();
-            link.remove();
+        filesInput.addEventListener('change', () => {
+            const fileCount = filesInput.files.length;
+            if (fileCount > 0) {
+                countInput. max = fileCount;
+                countInput.value = fileCount; // Set the value to the number of uploaded files
+            } else {
+                countInput.max = '';
+                countInput.value = ''; // Clear the value if no files are selected
+            }
 
-            resultContainer.innerHTML = '<div class="alert alert-success">Files merged successfully!</div>';
-        } else {
-            const result = await response.json();
-            resultContainer.innerHTML = `<div class="alert alert-danger">Error: ${result.error || 'An error occurred'}</div>`;
-        }
-    } catch (error) {
-        resultContainer.innerHTML = `<div class="alert alert-danger">Connection error: ${error.message}</div>`;
-    } finally {
-        loadingContainer.classList.add('d-none');
-        inputs.forEach(input => input.disabled = false);
-    }
-});
-</script>
+            const selectedFilesLabel = document.querySelector('.selected-files-count');
+            if (!selectedFilesLabel) {
+                const label = document.createElement('p');
+                label.className = 'selected-files-count mt-2';
+                form.querySelector('.mb-3').appendChild(label);
+            }
+        });
 
-<script>
-    document.getElementById('files').addEventListener('change', (event) => {
-    const filesInput = event.target;
-    const countInput = document.getElementById('count');
-    const fileCount = filesInput.files.length;
-
-    if (fileCount > 0) {
-        countInput.max = fileCount;
-        if (parseInt(countInput.value, 10) > fileCount) {
-            countInput.value = fileCount;
-        }
-    } else {
-        countInput.max = '';
-    }
-});
-</script>
-
-<script>
-    document.getElementById('count').addEventListener('input', (event) => {
-    const countInput = event.target;
-    const max = parseInt(countInput.max, 10);
-
-    if (parseInt(countInput.value, 10) > max) {
-        alert(`You cannot enter a value greater than ${max}`);
-        countInput.value = max;
-    }
-});
+        countInput.addEventListener('input', () => {
+            const max = parseInt(countInput.max, 10);
+            if (parseInt(countInput.value, 10) > max) {
+                alert(`You cannot enter a value greater than ${max}`);
+                countInput.value = max;
+            }
+        });
+    });
 </script>
 </body>
 </html>

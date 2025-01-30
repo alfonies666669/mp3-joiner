@@ -1,10 +1,15 @@
+import re
 import os
+import logging
 import subprocess
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class Merge:
-
     @staticmethod
     def _normalize_mp3_file(input_file, output_file, sample_rate=44100, bitrate='192k'):
         command = [
@@ -17,7 +22,7 @@ class Merge:
         ]
         result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if result.returncode != 0:
-            print(result.stderr.decode('utf-8'))
+            logger.error(result.stderr.decode('utf-8'))
             return None
         return output_file
 
@@ -36,7 +41,7 @@ class Merge:
         return merged
 
     @staticmethod
-    def normalize_mp3_file_parallel(files, merged_folder, sample_rate=44100, bitrate='192k'):
+    def normalize_mp3_file_parallel(files: list, merged_folder: str, sample_rate=44100, bitrate='192k') -> list:
         normalized_files = [None] * len(files)
         with ThreadPoolExecutor() as executor:
             futures = []
@@ -50,9 +55,15 @@ class Merge:
                     bitrate
                 ))
                 futures[-1].file_index = idx
-
             for future in as_completed(futures):
                 normalized_file = future.result()
                 if normalized_file:
                     normalized_files[future.file_index] = normalized_file
         return normalized_files
+
+    @staticmethod
+    def normalize_filename(filename: str) -> str:
+        filename = unicodedata.normalize("NFKC", filename)
+        filename = re.sub(r'[^\w\s.-]', '', filename, flags=re.UNICODE)
+        filename = filename.strip().replace(" ", "_")
+        return filename
