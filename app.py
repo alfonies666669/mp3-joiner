@@ -1,8 +1,8 @@
 import os
 import uuid
 from flask_compress import Compress
-from flask import Flask, request, jsonify, send_file, render_template, after_this_request
 from tools.utils import saving_files, merge_mp3_files_ffmpeg, create_zip, remove_folder, logger
+from flask import Flask, request, jsonify, send_file, render_template, after_this_request, send_from_directory
 
 app = Flask(__name__)
 Compress(app)
@@ -21,6 +21,11 @@ app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
 @app.route('/')
 def index():
     return render_template('index.html')
+
+
+@app.route('/how-it-works')
+def how_it_works():
+    return render_template('how-it-works.html')
 
 
 @app.errorhandler(413)

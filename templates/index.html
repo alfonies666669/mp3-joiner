@@ -5,8 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MP3 Joiner</title>
     <link href="/static/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .beta-banner {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 165, 0, 0.9);
+            color: white;
+            padding: 6px 12px;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 6px;
+            z-index: 1000;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+    </style>
 </head>
 <body>
+<div class="beta-banner" id="beta-banner">
+    🚀 This project is in <strong>Beta</strong>. Your feedback is welcome!
+    <button onclick="document.getElementById('beta-banner').style.display='none'"
+            style="background: none; border: none; color: white; margin-left: 10px; cursor: pointer;">✖
+    </button>
+</div>
 <div class="container my-5">
     <h1 class="text-center mb-4">MP3 Joiner</h1>
     <form id="mergeForm" class="card p-4 shadow-sm" enctype="multipart/form-data">
@@ -28,6 +49,24 @@
     </div>
     <p class="mt-2">Merging files, please wait...</p>
 </div>
+<footer class="bg-light text-center text-lg-start mt-5">
+    <div class="container p-4">
+        <div class="row">
+            <div class="col-lg-6 col-md-12 mb-4 mb-md-0">
+                <h5 class="text-uppercase">Help & Documentation</h5>
+                <ul class="list-unstyled">
+                    <li>
+                       <a href="/how-it-works">How does it work?</a>
+                    </li>
+                </ul>
+            </div>
+            <div class="col-lg-6 col-md-12 mb-4 mb-md-0">
+                <h5 class="text-uppercase">Contact Us</h5>
+                <p>Email: feedbackmp3joiner@gmail.com</p>
+            </div>
+        </div>
+    </div>
+</footer>
 <script>
     document.addEventListener('DOMContentLoaded', () => {
         const form = document.getElementById('mergeForm');
@@ -35,7 +74,6 @@
         const resultContainer = document.getElementById('result');
         const filesInput = document.getElementById('files');
         const countInput = document.getElementById('count');
-
         form.addEventListener('submit', async (event) => {
             event.preventDefault();
             const formData = new FormData(form);
@@ -43,7 +81,6 @@
             loadingContainer.classList.remove('d-none');
             resultContainer.innerHTML = '';
             inputs.forEach(input => input.disabled = true);
-
             try {
                 const response = await fetch('/merge', {
                     method: 'POST',
@@ -71,17 +108,15 @@
                 inputs.forEach(input => input.disabled = false);
             }
         });
-
         filesInput.addEventListener('change', () => {
             const fileCount = filesInput.files.length;
             if (fileCount > 0) {
-                countInput. max = fileCount;
+                countInput.max = fileCount;
                 countInput.value = fileCount; // Set the value to the number of uploaded files
             } else {
                 countInput.max = '';
                 countInput.value = ''; // Clear the value if no files are selected
             }
-
             const selectedFilesLabel = document.querySelector('.selected-files-count');
             if (!selectedFilesLabel) {
                 const label = document.createElement('p');
@@ -89,7 +124,6 @@
                 form.querySelector('.mb-3').appendChild(label);
             }
         });
-
         countInput.addEventListener('input', () => {
             const max = parseInt(countInput.max, 10);
             if (parseInt(countInput.value, 10) > max) {
