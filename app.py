@@ -1,8 +1,8 @@
 import os
 import uuid
 from flask_compress import Compress
+from flask import Flask, request, jsonify, send_file, render_template, after_this_request
 from tools.utils import saving_files, merge_mp3_files_ffmpeg, create_zip, remove_folder, logger
-from flask import Flask, request, jsonify, send_file, render_template, after_this_request, send_from_directory
 
 app = Flask(__name__)
 Compress(app)
