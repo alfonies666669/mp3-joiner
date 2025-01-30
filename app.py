@@ -1,9 +1,11 @@
 import os
 import uuid
+from flask_compress import Compress
 from flask import Flask, request, jsonify, send_file, render_template, after_this_request
 from tools.utils import saving_files, merge_mp3_files_ffmpeg, create_zip, remove_folder, logger
 
 app = Flask(__name__)
+Compress(app)
 
 BASE_UPLOAD_FOLDER = os.getenv('BASE_UPLOAD_FOLDER', 'uploads')
 BASE_MERGED_FOLDER = os.getenv('BASE_MERGED_FOLDER', 'merged')
