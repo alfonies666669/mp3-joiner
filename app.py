@@ -1,12 +1,12 @@
 import os
+import shutil
 import tempfile
 from flask_compress import Compress
-from flask import Flask, request, jsonify, send_file, render_template
 from tools.utils import saving_files, merge_mp3_files_ffmpeg, create_zip, logger
+from flask import Flask, request, jsonify, send_file, render_template, after_this_request
 
 app = Flask(__name__)
 Compress(app)
-
 MAX_CONTENT_LENGTH = int(os.getenv('MAX_CONTENT_LENGTH', 100 * 1024 * 1024))
 app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
 
@@ -40,13 +40,29 @@ def merge_files():
         if file.mimetype != 'audio/mpeg':
             logger.error(f"Invalid file type: {file.filename}")
             return jsonify({'error': 'Only MP3 files are allowed'}), 400
+    try:
+        upload_folder = tempfile.mkdtemp()
+        merged_folder = tempfile.mkdtemp()
 
-    with tempfile.TemporaryDirectory() as upload_folder, tempfile.TemporaryDirectory() as merged_folder:
         file_paths = saving_files(upload_folder, files)
         merged_files = merge_mp3_files_ffmpeg(file_paths, count, merged_folder=merged_folder)
         archive_path = create_zip(merged_folder, merged_files)
         logger.info("Files merged successfully")
+
+        @after_this_request
+        def cleanup(response):
+            try:
+                shutil.rmtree(upload_folder)
+                shutil.rmtree(merged_folder)
+            except Exception as E:
+                logger.error(f"Error during cleanup: {E}")
+            return response
+
         return send_file(archive_path, as_attachment=True)
+
+    except Exception as e:
+        logger.error(f"Error during merging files: {e}")
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':
