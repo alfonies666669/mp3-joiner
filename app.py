@@ -25,7 +25,7 @@ def how_it_works():
 def request_entity_too_large(error):
     logger.error("Request entity too large")
     return jsonify({
-        "error": "The total file size is too large (>100 MB). Please reduce the number of files or their sizes."
+        "error": f"The total file size is too large (>{MAX_CONTENT_LENGTH} MB). Please reduce the number of files or their sizes."
     }), 413
 
 
