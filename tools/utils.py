@@ -40,18 +40,3 @@ def create_zip(merged_folder: str, merged_files: list) -> str:
         for merged_file in merged_files:
             zipf.write(str(merged_file), os.path.basename(merged_file))
     return archive_path
-
-
-def _remove(folder_path: str):
-    if os.path.exists(folder_path):
-        shutil.rmtree(folder_path)
-    else:
-        logger.error(f"Folder '{folder_path}' does not exist.")
-
-
-def remove_folder(folder_paths: str | list[str]):
-    if isinstance(folder_paths, list):
-        for folder in folder_paths:
-            _remove(folder)
-    else:
-        _remove(folder_paths)
