@@ -52,7 +52,7 @@ Python and Flask, the app also utilizes FFmpeg for audio processing.
 
 4. Open your browser and navigate to:
    ```
-   http://127.0.0.1:5000
+   http://127.0.0.1:5001
    ```
 
 ---
@@ -70,12 +70,12 @@ You can deploy the application using Docker.
 
 2. Run the Docker container:
    ```bash
-   docker run -p 5000:5000 mp3-joiner
+   docker run -p 5001:5001 mp3-joiner
    ```
 
 3. Access the application at:
    ```
-   http://localhost:5000
+   http://localhost:5001
    ```
 
 ---
