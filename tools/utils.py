@@ -1,4 +1,3 @@
-import shutil
 from zipfile import ZipFile
 from tools.merge_utils import *
 

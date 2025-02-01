@@ -34,8 +34,9 @@ def merge_files():
     files = request.files.getlist('files')
     count = request.form.get('count', type=int)
     if not files or count is None:
-        logger.error("Files or count not provided")
-        return jsonify({'error': 'Files or count not provided'}), 400
+        error = 'Files or count not provided'
+        logger.error(error)
+        return jsonify({'error': error}), 400
     for file in files:
         if file.mimetype != 'audio/mpeg':
             logger.error(f"Invalid file type: {file.filename}")
