@@ -60,8 +60,11 @@ def merge_files():
 
         @after_this_request
         def cleanup(response):
-            shutil.rmtree(upload_folder, ignore_errors=True)
-            shutil.rmtree(merged_folder, ignore_errors=True)
+            try:
+                shutil.rmtree(upload_folder)
+                shutil.rmtree(merged_folder)
+            except Exception as E:
+                logger.error(f"Error during cleanup: {E}")
             return response
 
         return send_file(final_zip, as_attachment=True)
