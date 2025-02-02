@@ -2,17 +2,15 @@ from zipfile import ZipFile
 from tools.merge_utils import *
 
 
-def saving_files(upload_folder: str, files: list) -> list:
-    file_paths = []
-    for idx, file in enumerate(files, start=1):
-        original_filename = file.filename
-        safe_filename = Merge.normalize_filename(original_filename)
-        if not safe_filename:
-            safe_filename = f"file_{idx}.mp3"
-        file_path = os.path.join(upload_folder, safe_filename)
-        file.save(file_path)
-        file_paths.append(file_path)
-    return file_paths
+def saving_files_parallel(upload_folder: str, files: list) -> list:
+    with ThreadPoolExecutor() as executor:
+        results = executor.map(
+            Merge.save_single_file,
+            files,
+            [upload_folder] * len(files),
+            range(1, len(files) + 1)
+        )
+    return list(results)
 
 
 def merge_mp3_files_ffmpeg(file_paths: list, files_count: int, merged_folder: str) -> list:
@@ -33,9 +31,8 @@ def merge_mp3_files_ffmpeg(file_paths: list, files_count: int, merged_folder: st
     return merged_files
 
 
-def create_zip(merged_folder: str, merged_files: list) -> str:
-    archive_path = os.path.join(merged_folder, 'merged_files.zip')
-    with ZipFile(archive_path, 'w') as zipf:
+def create_zip(archive_path: str, merged_files: list):
+    with ZipFile(archive_path, 'a') as zipf:
         for merged_file in merged_files:
-            zipf.write(str(merged_file), os.path.basename(merged_file))
+            zipf.write(merged_file, os.path.basename(merged_file))
     return archive_path
