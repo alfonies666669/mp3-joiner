@@ -3,6 +3,7 @@ import os
 import logging
 import subprocess
 import unicodedata
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 logging.basicConfig(level=logging.INFO)
@@ -66,3 +67,12 @@ class Merge:
         filename = re.sub(r'[^\w\s.-]', '', filename, flags=re.UNICODE)
         filename = filename.strip().replace(" ", "_")
         return filename
+
+    @staticmethod
+    def save_single_file(file, upload_folder: str, idx: int) -> str:
+        safe_filename = Merge.normalize_filename(file.filename)
+        if not safe_filename:
+            safe_filename = f"file_{idx}.mp3"
+        file_path = Path(upload_folder) / safe_filename
+        file.save(str(file_path))
+        return str(file_path)
