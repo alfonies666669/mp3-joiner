@@ -13,6 +13,13 @@ def saving_files_parallel(upload_folder: str, files: list) -> list:
     return list(results)
 
 
+def create_zip(archive_path: str, merged_files: list):
+    with ZipFile(archive_path, 'a') as zipf:
+        for merged_file in merged_files:
+            zipf.write(merged_file, os.path.basename(merged_file))
+    return archive_path
+
+
 def merge_mp3_files_ffmpeg(file_paths: list, files_count: int, merged_folder: str) -> list:
     normalize_files = Merge.normalize_mp3_file_parallel(file_paths, merged_folder)
     merged_list = Merge.merge_strings(normalize_files, files_count)
@@ -31,28 +38,21 @@ def merge_mp3_files_ffmpeg(file_paths: list, files_count: int, merged_folder: st
     return merged_files
 
 
-def create_zip(archive_path: str, merged_files: list):
-    with ZipFile(archive_path, 'a') as zipf:
-        for merged_file in merged_files:
-            zipf.write(merged_file, os.path.basename(merged_file))
-    return archive_path
-
-
-def merge_mp3_files_memory(merged_list: list, merged_folder: str) -> list:
+def merge_mp3_files(merged_list: list, merged_folder: str) -> list:
     merged_files = []
-    for cnt, group in enumerate(merged_list):
-        merged_filename = os.path.join(merged_folder, f'Merged_{cnt + 1}.mp3')
-        # Используем буфер памяти (RAM), чтобы избежать лишней записи на диск
-        with open(merged_filename, 'wb') as output_file:
-            for file_path in group:
-                with open(file_path, 'rb') as input_file:
-                    output_file.write(input_file.read())  # Читаем и записываем напрямую
-        merged_files.append(merged_filename)
+    for cnt, file_group in enumerate(merged_list):
+        output_path = os.path.join(merged_folder, f'merged_file_{cnt + 1}.mp3')
+        with open(output_path, 'wb') as output_file:
+            result = subprocess.run(['cat'] + file_group.split(), stdout=output_file, stderr=subprocess.PIPE)
+        if result.returncode != 0:
+            logger.error(result.stderr.decode('utf-8'))
+            continue
+        merged_files.append(output_path)
     return merged_files
 
 
-def merge_mp3_parallel(file_paths: list, files_count: int, merged_folder: str) -> list:
+def merge_mp3(file_paths: list, files_count: int, merged_folder: str) -> list:
     same_format = Merge.are_mp3_files_identical_format(file_paths)
     merged_list = Merge.merge_strings(
         file_paths if same_format else Merge.normalize_mp3_file_parallel(file_paths, merged_folder), files_count)
-    return merge_mp3_files_memory(merged_list=merged_list, merged_folder=merged_folder)
+    return merge_mp3_files(merged_list=merged_list, merged_folder=merged_folder)

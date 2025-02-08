@@ -3,7 +3,7 @@ import shutil
 import tempfile
 from flask_compress import Compress
 from concurrent.futures import ProcessPoolExecutor
-from tools.utils import saving_files_parallel, merge_mp3_files_ffmpeg, create_zip, logger
+from tools.utils import saving_files_parallel, merge_mp3, create_zip, logger
 from flask import Flask, request, jsonify, send_file, render_template, after_this_request
 
 app = Flask(__name__)
@@ -52,7 +52,7 @@ def merge_files():
         merged_folder = tempfile.mkdtemp()
         archive_path = os.path.join(merged_folder, 'merged_files.zip')
         file_paths = saving_files_parallel(upload_folder, files)
-        merge_future = executor.submit(merge_mp3_files_ffmpeg, file_paths, count, merged_folder)
+        merge_future = executor.submit(merge_mp3, file_paths, count, merged_folder)
         merged_files = merge_future.result()
         zip_future = executor.submit(create_zip, archive_path, merged_files)
         final_zip = zip_future.result()
