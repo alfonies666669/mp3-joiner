@@ -31,13 +31,6 @@ class Merge:
         return output_file
 
     @staticmethod
-    def create_ffmpeg_input_file(file_paths, input_file='input.txt'):
-        with open(input_file, 'w') as f:
-            for path in file_paths:
-                f.write(f"file '{path}'\n")
-        return input_file
-
-    @staticmethod
     def merge_strings(strings: list, count: int) -> list:
         merged = []
         for i in range(0, len(strings), count):
