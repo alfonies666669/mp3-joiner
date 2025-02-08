@@ -1,5 +1,6 @@
 import re
 import os
+import json
 import logging
 import subprocess
 import unicodedata
@@ -75,3 +76,39 @@ class Merge:
         file_path = Path(upload_folder) / safe_filename
         file.save(str(file_path))
         return str(file_path)
+
+    @staticmethod
+    def _get_audio_info(file_path):
+        command = [
+            'ffprobe',
+            '-loglevel', 'error',
+            '-show_streams',
+            '-select_streams', 'a:0',
+            '-of', 'json',
+            file_path
+        ]
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if result.returncode != 0:
+            raise RuntimeError(f"FFprobe error: {result.stderr.decode('utf-8')}")
+        info = json.loads(result.stdout)
+        audio_stream = info['streams'][0]
+        return {
+            'bitrate': int(audio_stream.get('bit_rate', 0)),
+            'sample_rate': int(audio_stream.get('sample_rate', 0)),
+            'channels': int(audio_stream.get('channels', 0))
+        }
+
+    @staticmethod
+    def are_mp3_files_identical_format(file_paths):
+        if not file_paths or len(file_paths) < 2:
+            return True
+        with ThreadPoolExecutor() as executor:
+            formats = list(executor.map(Merge._get_audio_info, file_paths))
+        formats = [f for f in formats if f is not None]
+        if not formats:
+            return False
+        reference_format = formats[0]
+        for fmt in formats[1:]:
+            if fmt != reference_format:
+                return False
+        return True
