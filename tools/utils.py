@@ -20,21 +20,17 @@ def create_zip(archive_path: str, merged_files: list):
     return archive_path
 
 
-def merge_mp3_files(merged_list: list, merged_folder: str) -> list:
-    merged_files = []
-    for cnt, file_group in enumerate(merged_list):
-        output_path = os.path.join(merged_folder, f'merged_file_{cnt + 1}.mp3')
-        with open(output_path, 'wb') as output_file:
-            result = subprocess.run(['cat'] + file_group.split(), stdout=output_file, stderr=subprocess.PIPE)
-        if result.returncode != 0:
-            logger.error(result.stderr.decode('utf-8'))
-            continue
-        merged_files.append(output_path)
-    return merged_files
-
-
-def merge_mp3(file_paths: list, files_count: int, merged_folder: str) -> list:
+def merge_mp3(file_paths: list, files_count: int, merged_folder: str):
     same_format = Merge.are_mp3_files_identical_format(file_paths)
-    merged_list = Merge.merge_strings(
-        file_paths if same_format else Merge.normalize_mp3_file_parallel(file_paths, merged_folder), files_count)
-    return merge_mp3_files(merged_list=merged_list, merged_folder=merged_folder)
+    normalize_files = file_paths if same_format else Merge.normalize_mp3_file_parallel(file_paths, merged_folder)
+    mp3_without_tags = []
+    for idx, i in enumerate(normalize_files):
+        mp3_without_tags.append(Merge.clean_mp3(i, os.path.join(merged_folder, f'tags_none_{idx}.mp3')))
+    merged_list = Merge.merge_strings(mp3_without_tags, files_count)
+    for idx, merge_string in enumerate(merged_list):
+        output_path = os.path.join(merged_folder, f'merged_{idx + 1}.mp3')
+        try:
+            merged_command = f'cat {merge_string} > {output_path}'
+            subprocess.run(merged_command, shell=True, check=True)
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"Ошибка при выполнении команды cat: {e}")

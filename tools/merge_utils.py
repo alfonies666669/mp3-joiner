@@ -105,3 +105,36 @@ class Merge:
             if fmt != reference_format:
                 return False
         return True
+
+    @staticmethod
+    def rename_mp3_files(directory: str):
+        files = sorted([f for f in os.listdir(directory) if f.lower().endswith(".mp3")])
+        for idx, filename in enumerate(files, start=1):
+            old_path = os.path.join(directory, filename)
+            new_filename = f"file_{idx}.mp3"
+            new_path = os.path.join(directory, new_filename)
+            os.rename(old_path, new_path)
+
+    @staticmethod
+    def get_id3v2_size(file_path):
+        import struct
+        """Определяет размер ID3v2-заголовка в MP3-файле."""
+        with open(file_path, "rb") as f:
+            header = f.read(10)
+            if header[:3] == b"ID3":  # Проверяем, есть ли тег
+                # Размер хранится в байтах 6-9 (7-битное кодирование)
+                size_bytes = header[6:10]
+                size = struct.unpack(">I", b"\x00" + size_bytes)[0]
+                return 10 + size  # Полный размер ID3v2-заголовка
+        return 0  # Если ID3v2 нет, ничего пропускать не надо
+
+    @staticmethod
+    def clean_mp3(file_path: str, output_path: str):
+        """Очищает MP3-файл от ID3v2 и ID3v1, используя truncate и tail."""
+        id3v2_size = Merge.get_id3v2_size(file_path)
+        # Удаляем ID3v1 (128 байт в конце файла)
+        subprocess.run(["truncate", "-s", "-128", file_path], check=True)
+        # Удаляем ID3v2 (первая N-байтовая часть файла)
+        with open(output_path, "wb") as out_file:
+            subprocess.run(["tail", "-c", f"+{id3v2_size + 1}", file_path], stdout=out_file, check=True)
+        print(f"Файл {file_path} очищен и сохранён как {output_path}")
