@@ -1,9 +1,13 @@
 import os
 import shutil
 import tempfile
+
+from flask import (Flask, after_this_request, jsonify, render_template,
+                   request, send_file)
 from flask_compress import Compress
-from tools.utils import saving_files, merge_mp3_files_ffmpeg, create_zip, logger
-from flask import Flask, request, jsonify, send_file, render_template, after_this_request
+
+from tools.utils import (create_zip, logger, merge_mp3_files_ffmpeg,
+                         saving_files)
 
 app = Flask(__name__)
 Compress(app)

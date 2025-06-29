@@ -1,6 +1,6 @@
-import re
-import os
 import logging
+import os
+import re
 import subprocess
 import unicodedata
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -64,5 +64,11 @@ class Merge:
     def normalize_filename(filename: str) -> str:
         filename = unicodedata.normalize("NFKC", filename)
         filename = re.sub(r'[^\w\s.-]', '', filename, flags=re.UNICODE)
-        filename = filename.strip().replace(" ", "_")
+        filename = filename.strip()
+        filename = re.sub(r'\s+', '_', filename)
+        filename = re.sub(r'_+\.', '.', filename)
+        filename = re.sub(r'_+$', '', filename)
+        filename = re.sub(r'^\.+', '', filename)
+        filename = re.sub(r'\.+$', '', filename)
+        filename = re.sub(r'__+', '_', filename)
         return filename
