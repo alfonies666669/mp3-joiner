@@ -1,0 +1,49 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  lint-format:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install pylint pytest black isort
+
+      - name: Run Black Check
+        run: black --check .
+
+      - name: Run isort Check
+        run: isort --check-only .
+
+      - name: Run Pylint
+        run: pylint tools tests app.py
+        continue-on-error: true
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install -e .
+          pip install pytest
+
+      - name: Run Tests
+        run: |
+          pytest -v

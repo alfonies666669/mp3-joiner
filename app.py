@@ -1,50 +1,85 @@
+"""
+Main Flask application for merging MP3 files.
+"""
+
 import os
 import shutil
 import tempfile
+from typing import Any, List
 
-from flask import (Flask, after_this_request, jsonify, render_template,
-                   request, send_file)
 from flask_compress import Compress
+from flask import Flask, jsonify, request, send_file, render_template, after_this_request
 
-from tools.utils import (create_zip, logger, merge_mp3_files_ffmpeg,
-                         saving_files)
+from tools.utils import logger, create_zip, saving_files, merge_mp3_files_ffmpeg
 
 app = Flask(__name__)
 Compress(app)
-MAX_CONTENT_LENGTH = int(os.getenv('MAX_CONTENT_LENGTH', 100 * 1024 * 1024))
-app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
+
+# Получаем максимальный размер загружаемых файлов из переменной окружения
+MAX_CONTENT_LENGTH = int(os.getenv("MAX_CONTENT_LENGTH", "104857600"))  # 100 MB
+app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
 
 
-@app.route('/')
+@app.route("/")
 def index():
-    return render_template('index.html')
+    """
+    Главная страница приложения.
+
+    Возвращает HTML-шаблон главной страницы.
+    """
+    return render_template("index.html")
 
 
-@app.route('/how-it-works')
+@app.route("/how-it-works")
 def how_it_works():
-    return render_template('how-it-works.html')
+    """
+    Страница "Как это работает".
+
+    Возвращает HTML-шаблон страницы с описанием работы сервиса.
+    """
+    return render_template("how-it-works.html")
 
 
 @app.errorhandler(413)
-def request_entity_too_large(error):
+def request_entity_too_large(_):
+    """
+    Обработчик ошибки превышения размера запроса (HTTP 413).
+
+    :param _: Неиспользуемый аргумент ошибки
+    :return: JSON-ответ с сообщением об ошибке
+    """
     logger.error("Request entity too large")
-    return jsonify({
-        "error": f"The total file size is too large (>{MAX_CONTENT_LENGTH} MB). Please reduce the number of files or their sizes."
-    }), 413
+    return (
+        jsonify(
+            {
+                "error": f"The total file size is too large (> {MAX_CONTENT_LENGTH / (1024 * 1024)} MB). "
+                "Please reduce the number of files or their sizes."
+            }
+        ),
+        413,
+    )
 
 
-@app.route('/merge', methods=['POST'])
+@app.route("/merge", methods=["POST"])
 def merge_files():
-    files = request.files.getlist('files')
-    count = request.form.get('count', type=int)
+    """
+    Объединяет загруженные MP3-файлы в группы и возвращает ZIP-архив.
+
+    :return: ZIP-файл с объединёнными файлами или JSON-ошибка
+    """
+    files = request.files.getlist("files")  # type: List[Any]
+    count = request.form.get("count", type=int)
+
     if not files or count is None:
-        error = 'Files or count not provided'
-        logger.error(error)
-        return jsonify({'error': error}), 400
+        error_msg = "Files or count not provided"
+        logger.error("Files or count not provided")
+        return jsonify({"error": error_msg}), 400
+
     for file in files:
-        if file.mimetype != 'audio/mpeg':
-            logger.error(f"Invalid file type: {file.filename}")
-            return jsonify({'error': 'Only MP3 files are allowed'}), 400
+        if file.mimetype != "audio/mpeg":
+            logger.error("Invalid file type: %s", file.filename)
+            return jsonify({"error": "Only MP3 files are allowed"}), 400
+
     try:
         upload_folder = tempfile.mkdtemp()
         merged_folder = tempfile.mkdtemp()
@@ -59,17 +94,18 @@ def merge_files():
             try:
                 shutil.rmtree(upload_folder)
                 shutil.rmtree(merged_folder)
-            except Exception as E:
-                logger.error(f"Error during cleanup: {E}")
+            except OSError as E:
+                logger.error("Error during cleanup: %s", E)
             return response
 
         return send_file(archive_path, as_attachment=True)
 
-    except Exception as e:
-        logger.error(f"Error during merging files: {e}")
-        return jsonify({'error': str(e)}), 500
+    except Exception as E:
+        logger.error("Error during merging files: %s", E)
+        return jsonify({"error": str(E)}), 500
 
 
-if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5001))
-    app.run(host='0.0.0.0', port=port, debug=True)
+в
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", "5001"))
+    app.run(host="0.0.0.0", port=port, debug=True)
