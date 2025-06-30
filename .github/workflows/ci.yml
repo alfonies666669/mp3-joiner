@@ -2,15 +2,20 @@ name: CI Pipeline
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   pull_request:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
-  lint-format:
+  lint-test:
+    name: Lint, Format Check & Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -18,7 +23,9 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install pylint pytest black isort
+          pip install --upgrade pip
+          pip install -e .
+          pip install pytest pylint black isort pytest-cov codecov
 
       - name: Run Black Check
         run: black --check .
@@ -30,20 +37,11 @@ jobs:
         run: pylint tools tests app.py
         continue-on-error: true
 
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Run Tests with Coverage
+        run: |
+          pytest --cov=tools --cov=app tests/
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
         with:
-          python-version: '3.10'
-
-      - name: Install dependencies
-        run: |
-          pip install -e .
-          pip install pytest
-
-      - name: Run Tests
-        run: |
-          pytest -v
+          token: ${{ secrets.CODECOV_TOKEN }}
