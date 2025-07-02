@@ -121,4 +121,4 @@ MIT License — см. [LICENSE](LICENSE).
 
 ## Live Demo
 
-В разработке (домен появится после полной публикации).
+http://mp3-joiner.ru
