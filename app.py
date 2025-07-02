@@ -16,7 +16,7 @@ app = Flask(__name__)
 Compress(app)
 
 # Получаем максимальный размер загружаемых файлов из переменной окружения
-MAX_CONTENT_LENGTH = int(os.getenv("MAX_CONTENT_LENGTH", "104857600"))  # 100 MB
+MAX_CONTENT_LENGTH = int(os.getenv("MAX_CONTENT_LENGTH", "536870912"))  # 512 MB
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
 
 
