@@ -9,6 +9,7 @@ import tempfile
 from typing import Any, List
 
 from flask_compress import Compress
+from werkzeug.middleware.proxy_fix import ProxyFix
 from flask import Flask, jsonify, request, send_file, render_template, after_this_request
 
 from logger.logger import app_logger, user_logger
@@ -16,6 +17,7 @@ from tools.utils import create_zip, saving_files, check_files_are_mp3, smart_mer
 
 app = Flask(__name__)
 Compress(app)
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 
 # Получаем максимальный размер загружаемых файлов из переменной окружения
 MAX_CONTENT_LENGTH = int(os.getenv("MAX_CONTENT_LENGTH", str(100 * 1024 * 1024)))
