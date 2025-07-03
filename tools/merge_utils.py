@@ -1,7 +1,3 @@
-"""
-Модуль, содержащий утилиты для обработки и объединения MP3-файлов.
-"""
-
 import os
 import re
 import tempfile
@@ -21,11 +17,25 @@ class Merge:
 
     @staticmethod
     def _get_mp3_params(file_path: str) -> tuple:
-        audio = MP3(file_path)
-        return audio.info.bitrate, audio.info.sample_rate, audio.info.channels
+        """
+        Возвращает параметры MP3-файла (bitrate, sample_rate, channels).
+        """
+        try:
+            audio = MP3(file_path)
+            # Безопасно берем значения, если нет — ставим None
+            bitrate = getattr(audio.info, "bitrate", None)
+            sample_rate = getattr(audio.info, "sample_rate", None)
+            channels = getattr(audio.info, "channels", None)
+            return bitrate, sample_rate, channels
+        except Exception as e:
+            app_logger.error("Failed to get MP3 params for %s: %s", file_path, e)
+            return None, None, None
 
     @staticmethod
     def all_params_equal(files: list) -> bool:
+        """
+        Проверяет, одинаковы ли параметры у всех файлов.
+        """
         params = [Merge._get_mp3_params(f) for f in files]
         return all(p == params[0] for p in params)
 
@@ -33,9 +43,6 @@ class Merge:
     def normalize_filename(filename: str) -> str:
         """
         Приводит имя файла к безопасному формату.
-
-        :param filename: Исходное имя файла
-        :return: нормализованное имя файла
         """
         filename = unicodedata.normalize("NFKC", filename)
         filename = re.sub(r"[^\w\s.-]", "", filename, flags=re.UNICODE)
@@ -76,9 +83,9 @@ class Merge:
                 output_path,
                 "-y",
             ]
-            result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
             if result.returncode != 0:
-                app_logger.error(f"[normalize_mp3] Error for {file_path}: {result.stderr.decode('utf-8')}")
+                app_logger.error("[normalize_mp3] Error for %s: %s", file_path, result.stderr.decode("utf-8"))
                 return idx, None
             return idx, output_path
 
@@ -89,9 +96,11 @@ class Merge:
                 if result:
                     normalized_files[idx] = result
                 else:
-                    app_logger.error(f"Normalization failed for {files[idx]}")
+                    app_logger.error("Normalization failed for %s", files[idx])
         if any(f is None for f in normalized_files):
-            app_logger.error(f"Normalized only {sum(f is not None for f in normalized_files)} of {len(files)} files.")
+            app_logger.error(
+                "Normalized only %d of %d files.", sum(f is not None for f in normalized_files), len(files)
+            )
 
         return normalized_files
 
@@ -113,10 +122,13 @@ class Merge:
             with open(output_path, "wb") as out_f:
                 for file_path in group:
                     if not os.path.isfile(file_path):
-                        print(f"Warning: File '{file_path}' does not exist, skipping.")
+                        app_logger.warning("File '%s' does not exist, skipping.", file_path)
                         continue
                     with open(file_path, "rb") as in_f:
-                        for chunk in iter(lambda: in_f.read(1024 * 1024), b""):
+                        while True:
+                            chunk = in_f.read(1024 * 1024)
+                            if not chunk:
+                                break
                             out_f.write(chunk)
             merged_paths.append(output_path)
         return merged_paths
@@ -138,10 +150,9 @@ class Merge:
                 list_path = f.name
             try:
                 command = ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_path, "-c", "copy", output_path]
-                result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
                 if result.returncode != 0:
-                    app_logger.error(f"FFmpeg error for group {idx}:")
-                    app_logger.error(result.stderr.decode())
+                    app_logger.error("FFmpeg error for group %d: %s", idx, result.stderr.decode())
                     continue
                 merged_paths.append(output_path)
             finally:

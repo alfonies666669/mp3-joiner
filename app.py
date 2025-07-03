@@ -18,7 +18,7 @@ app = Flask(__name__)
 Compress(app)
 
 # Получаем максимальный размер загружаемых файлов из переменной окружения
-MAX_CONTENT_LENGTH = int(os.getenv("MAX_CONTENT_LENGTH", 100 * 1024 * 1024))
+MAX_CONTENT_LENGTH = int(os.getenv("MAX_CONTENT_LENGTH", str(100 * 1024 * 1024)))
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
 
 
@@ -70,6 +70,7 @@ def merge_files():
     :return: ZIP-файл с объединёнными файлами или JSON-ошибка
     """
     start_time = time.time()
+    print("user_logger:", user_logger)
     files = request.files.getlist("files")  # type: List[Any]
     count = request.form.get("count", type=int)
     ip_addr = request.remote_addr
