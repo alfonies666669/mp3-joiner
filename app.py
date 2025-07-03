@@ -10,7 +10,7 @@ from typing import Any, List
 from flask_compress import Compress
 from flask import Flask, jsonify, request, send_file, render_template, after_this_request
 
-from tools.utils import logger, create_zip, saving_files, merge_mp3_files_ffmpeg
+from tools.utils import logger, create_zip, saving_files, check_files_are_mp3, smart_merge_mp3_files
 
 app = Flask(__name__)
 Compress(app)
@@ -75,17 +75,16 @@ def merge_files():
         logger.error("Files or count not provided")
         return jsonify({"error": error_msg}), 400
 
-    for file in files:
-        if file.mimetype != "audio/mpeg":
-            logger.error("Invalid file type: %s", file.filename)
-            return jsonify({"error": "Only MP3 files are allowed"}), 400
+    error = check_files_are_mp3(files)
+    if error:
+        return jsonify(error[0]), error[1]
 
     try:
         upload_folder = tempfile.mkdtemp()
         merged_folder = tempfile.mkdtemp()
 
         file_paths = saving_files(upload_folder, files)
-        merged_files = merge_mp3_files_ffmpeg(file_paths, count, merged_folder=merged_folder)
+        merged_files = smart_merge_mp3_files(file_paths, count, merged_folder=merged_folder)
         archive_path = create_zip(merged_folder, merged_files)
         logger.info("Files merged successfully")
 
@@ -93,9 +92,12 @@ def merge_files():
         def cleanup(response):
             try:
                 shutil.rmtree(upload_folder)
+            except OSError as e:
+                logger.error("Error cleaning upload_folder: %s", e)
+            try:
                 shutil.rmtree(merged_folder)
-            except OSError as E:
-                logger.error("Error during cleanup: %s", E)
+            except OSError as e:
+                logger.error("Error cleaning merged_folder: %s", e)
             return response
 
         return send_file(archive_path, as_attachment=True)

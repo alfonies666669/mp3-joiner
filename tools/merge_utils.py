@@ -9,6 +9,8 @@ import subprocess
 import unicodedata
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from mutagen.mp3 import MP3
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -19,109 +21,59 @@ class Merge:
     """
 
     @staticmethod
-    def _normalize_mp3_file(
-        input_file: str,
-        output_file: str,
-        sample_rate: int,
-        bit_rate: int,
-        channels: int,
-    ) -> str | None:
-        """
-        Нормализует один аудиофайл с помощью FFmpeg.
-
-        :param input_file: Путь к исходному файлу,
-        :param output_file: путь к выходному файлу
-        :param sample_rate: частота дискретизации
-        :param bit_rate: битрейт
-        :param channels: количество каналов
-        :return: путь к выходному файлу или None при ошибке
-        """
-        command = [
-            "ffmpeg",
-            "-i",
-            input_file,
-            "-ar",
-            str(sample_rate),
-            "-ab",
-            f"{bit_rate}k",
-            "-ac",
-            str(channels),
-            "-c:a",
-            "libmp3lame",
-            output_file,
-        ]
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
-        if result.returncode != 0:
-            logger.error(result.stderr.decode("utf-8"))
-            return None
-        return output_file
+    def _get_mp3_params(file_path: str) -> tuple:
+        audio = MP3(file_path)
+        return audio.info.bitrate, audio.info.sample_rate, audio.info.channels
 
     @staticmethod
-    def create_ffmpeg_input_file(file_paths, input_file="input.txt") -> str:
-        """
-        Создаёт временный файл с путями входных файлов для FFmpeg.
-
-        :param file_paths: Список путей к файлам
-        :param input_file: имя временного файла
-        :return: путь к созданному файлу
-        """
-        with open(input_file, "w", encoding="utf-8") as f:
-            for path in file_paths:
-                f.write(f"file '{path}'\n")
-        return input_file
-
-    @staticmethod
-    def merge_strings(strings: list, count: int) -> list:
-        """
-        Разбивает список строк на подгруппы по заданному количеству элементов.
-
-        :param strings: Список строк,
-        :param count: максимальное количество элементов в группе,
-        :return: список списков строк
-        """
-        merged = []
-        for i in range(0, len(strings), count):
-            merged.append(" ".join(strings[i : i + count]))
-        return merged
+    def all_params_equal(files: list) -> bool:
+        params = [Merge._get_mp3_params(f) for f in files]
+        return all(p == params[0] for p in params)
 
     @staticmethod
     def normalize_mp3_file_parallel(
-        files: list,
-        merged_folder: str,
-        sample_rate: int = 44100,
-        bit_rate: int = 192,
-        channels: int = 2,
+        files: list, merged_folder: str, sample_rate: int = 44100, bit_rate: int = 192, channels: int = 2
     ) -> list:
         """
         Параллельно нормализует несколько аудиофайлов.
-
-        :param files: Список путей к исходным файлам,
-        :param merged_folder: директория для сохранения результатов,
-        :param sample_rate: частота дискретизации,
-        :param bit_rate: битрейт,
-        :param channels: количество каналов,
-        :return: список путей к нормализованным файлам.
+        Возвращает список реально нормализованных файлов (без None).
         """
-        normalized_files = [None] * len(files)
+        os.makedirs(merged_folder, exist_ok=True)
+        normalized_files = []
+
+        def normalize_one(file_path):
+            output_path = os.path.join(merged_folder, f"normalized_{os.path.basename(file_path)}")
+            command = [
+                "ffmpeg",
+                "-i",
+                file_path,
+                "-ar",
+                str(sample_rate),
+                "-ab",
+                f"{bit_rate}k",
+                "-ac",
+                str(channels),
+                "-c:a",
+                "libmp3lame",
+                output_path,
+                "-y",
+            ]
+            result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            if result.returncode != 0:
+                logger.error(f"[normalize_mp3] Error for {file_path}: {result.stderr.decode('utf-8')}")
+                return None
+            return output_path
+
         with ThreadPoolExecutor() as executor:
-            futures = []
-            for idx, file in enumerate(files):
-                normalized_file = os.path.join(merged_folder, f"normalized_{os.path.basename(file)}")
-                futures.append(
-                    executor.submit(
-                        Merge._normalize_mp3_file,
-                        file,
-                        normalized_file,
-                        sample_rate,
-                        bit_rate,
-                        channels,
-                    )
-                )
-                futures[-1].file_index = idx
-            for future in as_completed(futures):
-                normalized_file = future.result()
-                if normalized_file:
-                    normalized_files[future.file_index] = normalized_file
+            future_to_file = {executor.submit(normalize_one, f): f for f in files}
+            for future in as_completed(future_to_file):
+                result = future.result()
+                if result:
+                    normalized_files.append(result)
+                else:
+                    logger.error(f"Normalization failed for {future_to_file[future]}")
+        if len(normalized_files) < len(files):
+            logger.error(f"Normalized only {len(normalized_files)} of {len(files)} files.")
         return normalized_files
 
     @staticmethod
@@ -142,3 +94,29 @@ class Merge:
         filename = re.sub(r"\.+$", "", filename)
         filename = re.sub(r"__+", "_", filename)
         return filename
+
+    @staticmethod
+    def merge_files_in_groups(file_list: list[str], group_size: int, output_folder: str) -> list[str]:
+        """
+        Объединяет файлы из списка по группам заданного размера побайтово.
+        *Объединение работает корректно только с файлами, имеющими одинаковые х-ки.
+        :param file_list: Список путей к исходным файлам.
+        :param group_size: Количество файлов в группе для объединения.
+        :param output_folder: Папка, куда будут сохранены объединённые файлы.
+        :return: Список путей к объединённым файлам.
+        """
+        os.makedirs(output_folder, exist_ok=True)
+        merged_paths = []
+        for idx, start in enumerate(range(0, len(file_list), group_size), start=1):
+            group = file_list[start : start + group_size]
+            output_path = os.path.join(output_folder, f"merged_{idx}.mp3")
+            with open(output_path, "wb") as out_f:
+                for file_path in group:
+                    if not os.path.isfile(file_path):
+                        print(f"Warning: File '{file_path}' does not exist, skipping.")
+                        continue
+                    with open(file_path, "rb") as in_f:
+                        for chunk in iter(lambda: in_f.read(1024 * 1024), b""):
+                            out_f.write(chunk)
+            merged_paths.append(output_path)
+        return merged_paths
