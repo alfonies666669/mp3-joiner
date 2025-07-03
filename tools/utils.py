@@ -7,7 +7,8 @@ from zipfile import ZipFile
 
 from mutagen.mp3 import MP3
 
-from tools.merge_utils import Merge, logger
+from tools.merge_utils import Merge
+from logger.logger import app_logger
 
 
 def check_files_are_mp3(files) -> None | tuple:
@@ -22,9 +23,8 @@ def check_files_are_mp3(files) -> None | tuple:
             MP3(file.stream)
             file.stream.seek(0)
         except Exception as e:
-            if logger:
-                logger.error(f"Corrupt or invalid MP3: {file.filename}")
-                logger.error(f"Exception: {e}")
+            app_logger.error(f"Corrupt or invalid MP3: {file.filename}")
+            app_logger.error(f"Exception: {e}")
             return {"error": f"File {file.filename} is not a valid MP3"}, 400
     return None
 
@@ -41,7 +41,7 @@ def saving_files(upload_folder: str, files: list) -> list:
             file.save(path)
             file_paths.append(path)
         except Exception as e:
-            logger.error(f"Ошибка при сохранении {file.filename}: {e}")
+            app_logger.error(f"Ошибка при сохранении {file.filename}: {e}")
             raise RuntimeError(f"Ошибка при сохранении {file.filename}: {e}")
     return file_paths
 
@@ -71,8 +71,7 @@ def create_zip(merged_folder: str, merged_files: list) -> str:
     archive_path = os.path.join(merged_folder, "merged_files.zip")
     if not merged_files:
         msg = "Нет файлов для архивации."
-        if logger:
-            logger.error(msg)
+        app_logger.error(msg)
         raise RuntimeError(msg)
     with ZipFile(archive_path, "w") as zipf:
         for merged_file in merged_files:
@@ -80,6 +79,6 @@ def create_zip(merged_folder: str, merged_files: list) -> str:
                 zipf.write(str(merged_file), os.path.basename(merged_file))
             else:
                 warning_msg = f"Файл {merged_file} не найден, не добавлен в архив."
-                logger.warning(warning_msg)
-    logger.info(f"Создан архив: {archive_path}")
+                app_logger.warning(warning_msg)
+    app_logger.info(f"Создан архив: {archive_path}")
     return archive_path

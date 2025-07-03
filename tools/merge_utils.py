@@ -4,7 +4,6 @@
 
 import os
 import re
-import logging
 import tempfile
 import subprocess
 import unicodedata
@@ -12,8 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from mutagen.mp3 import MP3
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from logger.logger import app_logger
 
 
 class Merge:
@@ -80,7 +78,7 @@ class Merge:
             ]
             result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             if result.returncode != 0:
-                logger.error(f"[normalize_mp3] Error for {file_path}: {result.stderr.decode('utf-8')}")
+                app_logger.error(f"[normalize_mp3] Error for {file_path}: {result.stderr.decode('utf-8')}")
                 return idx, None
             return idx, output_path
 
@@ -91,9 +89,9 @@ class Merge:
                 if result:
                     normalized_files[idx] = result
                 else:
-                    logger.error(f"Normalization failed for {files[idx]}")
+                    app_logger.error(f"Normalization failed for {files[idx]}")
         if any(f is None for f in normalized_files):
-            logger.error(f"Normalized only {sum(f is not None for f in normalized_files)} of {len(files)} files.")
+            app_logger.error(f"Normalized only {sum(f is not None for f in normalized_files)} of {len(files)} files.")
 
         return normalized_files
 
@@ -142,8 +140,8 @@ class Merge:
                 command = ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_path, "-c", "copy", output_path]
                 result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 if result.returncode != 0:
-                    logger.error(f"FFmpeg error for group {idx}:")
-                    logger.error(result.stderr.decode())
+                    app_logger.error(f"FFmpeg error for group {idx}:")
+                    app_logger.error(result.stderr.decode())
                     continue
                 merged_paths.append(output_path)
             finally:
