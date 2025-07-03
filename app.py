@@ -31,6 +31,8 @@ def index():
 
     Возвращает HTML-шаблон главной страницы.
     """
+    ip = request.remote_addr
+    user_logger.info("Visited /", extra={"extra": {"ip": ip, "status": "visited", "type": "pageview"}})
     return render_template("index.html")
 
 
