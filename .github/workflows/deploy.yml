@@ -25,9 +25,15 @@ jobs:
           ssh -i ~/.ssh/id_rsa ${{ secrets.USER }}@${{ secrets.HOST }} '
             set -e
             cd ~/mp3-joiner
+            mkdir -p ~/mp3-joiner-logs
             git pull origin main
             docker build -t mp3-joiner .
             docker stop mp3joiner || true
             docker rm mp3joiner || true
-            docker run -d --name mp3joiner -p 5001:5001 mp3-joiner
+            docker run -d \
+              --name mp3joiner \
+              -p 5001:5001 \
+              -v ~/mp3-joiner-logs:/var/logs/mp3_joiner \
+              -e USER_LOG_PATH=/var/logs/mp3_joiner \
+              mp3-joiner
           '

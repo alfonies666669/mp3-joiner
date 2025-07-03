@@ -42,17 +42,25 @@ class JsonFormatter(logging.Formatter):
 
 
 def get_user_logger():
-    user_log_path = os.environ.get("USER_LOG_PATH")
-    if not user_log_path:
-        return None  # Don't create user_logger if not set
+    base_path = os.environ.get("USER_LOG_PATH")
+    if not base_path:
+        return None
+    if os.path.isdir(base_path):
+        log_file_path = os.path.join(base_path, "user_actions.json")
+    else:
+        log_file_path = base_path
     logger = logging.getLogger("user_actions")
     if not logger.handlers:
-        handler = JsonFileHandler(user_log_path)
-        formatter = JsonFormatter()
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-        logger.setLevel(logging.INFO)
-        logger.propagate = False
+        try:
+            handler = JsonFileHandler(log_file_path)
+            formatter = JsonFormatter()
+            handler.setFormatter(formatter)
+            logger.addHandler(handler)
+            logger.setLevel(logging.INFO)
+            logger.propagate = False
+        except Exception as e:
+            print(f"Failed to setup user logger: {e}")
+            return None
     return logger
 
 
