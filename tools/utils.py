@@ -56,7 +56,7 @@ def smart_merge_mp3_files(file_paths: list, files_count: int, merged_folder: str
         return Merge.merge_files_in_groups(file_paths, files_count, merged_folder)
     else:
         normalized_files = Merge.normalize_mp3_file_parallel(file_paths, merged_folder)
-        return Merge.merge_files_in_groups(normalized_files, files_count, merged_folder)
+        return Merge.merge_mp3_groups_ffmpeg(normalized_files, files_count, merged_folder)
 
 
 def create_zip(merged_folder: str, merged_files: list) -> str:
