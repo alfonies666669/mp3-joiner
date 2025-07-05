@@ -1,8 +1,15 @@
-/uploads
-/merged
-# Default ignored files
-/shelf/
-/workspace.xml
-.idea
-.venv
-/logs
+.DS_Store
+__pycache__/
+*.idea
+*.py[cod]
+*.pyo
+.venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+dist/
+build/
+*logs
+/tokens
+EOF

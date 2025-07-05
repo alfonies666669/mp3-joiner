@@ -45,10 +45,7 @@ def get_user_logger():
     base_path = os.environ.get("USER_LOG_PATH")
     if not base_path:
         return None
-    if os.path.isdir(base_path):
-        log_file_path = os.path.join(base_path, "user_actions.json")
-    else:
-        log_file_path = base_path
+    log_file_path = os.path.join(base_path, "user_actions.json") if os.path.isdir(base_path) else base_path
     logger = logging.getLogger("user_actions")
     if not logger.handlers:
         try:

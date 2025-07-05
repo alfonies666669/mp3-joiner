@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pytest_cache/
+.git
+.gitlab-ci.yml
+.github/
+tests/
+logs/
+*.log
+.env*
+README.md
+docs/

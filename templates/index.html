@@ -33,6 +33,7 @@
     <form id="mergeForm" class="card p-4 shadow-sm" enctype="multipart/form-data">
         <div class="mb-3">
             <label for="files" class="form-label">Select MP3 Files:</label>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <input type="file" id="files" name="files" class="form-control" multiple accept=".mp3" required>
         </div>
         <div class="mb-3">
@@ -85,6 +86,7 @@
                 const response = await fetch('/merge', {
                     method: 'POST',
                     body: formData,
+                    credentials: 'same-origin'
                 });
                 if (response.ok) {
                     const blob = await response.blob();
