@@ -10,8 +10,9 @@ from typing import Any, List
 
 from flask_compress import Compress
 from werkzeug.middleware.proxy_fix import ProxyFix
-from flask import Flask, jsonify, request, send_file, render_template, after_this_request
+from flask import Flask, Blueprint, jsonify, request, send_file, render_template, after_this_request
 
+from tools.api_auth import IPGeoTokenManager
 from logger.logger import app_logger, user_logger
 from tools.utils import create_zip, saving_files, check_files_are_mp3, smart_merge_mp3_files
 
@@ -22,17 +23,23 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 # Получаем максимальный размер загружаемых файлов из переменной окружения
 MAX_CONTENT_LENGTH = int(os.getenv("MAX_CONTENT_LENGTH", str(100 * 1024 * 1024)))
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
+TOKEN_FILE_PATH = os.getenv("TOKEN_FILE_PATH", "allowed_tokens.txt")
+token_manager = IPGeoTokenManager(token_file=TOKEN_FILE_PATH, logger=user_logger)
+app.register_blueprint(token_manager.api_blueprint(), url_prefix="/api")
 
 
 @app.route("/")
 def index():
     """
     Главная страница приложения.
-
     Возвращает HTML-шаблон главной страницы.
     """
     ip = request.remote_addr
-    user_logger.info("Visited /", extra={"extra": {"ip": ip, "status": "visited", "type": "pageview"}})
+    if user_logger is not None:
+        user_logger.info("Visited /", extra={"extra": {"ip": ip, "status": "visited", "type": "pageview"}})
+    else:
+        app_logger.warning("user_logger не инициализирован — проверь USER_LOG_PATH")
+
     return render_template("index.html")
 
 
@@ -74,7 +81,6 @@ def merge_files():
     :return: ZIP-файл с объединёнными файлами или JSON-ошибка
     """
     start_time = time.time()
-    print("user_logger:", user_logger)
     files = request.files.getlist("files")  # type: List[Any]
     count = request.form.get("count", type=int)
     ip_addr = request.remote_addr

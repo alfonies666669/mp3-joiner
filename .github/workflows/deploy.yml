@@ -36,5 +36,6 @@ jobs:
               -v ~/mp3-joiner-logs:/var/logs/mp3_joiner \
               -v ~/mp3-tokens:/app/tokens \
               -e USER_LOG_PATH=/var/logs/mp3_joiner \
+              -e TOKEN_FILE_PATH=/app/tokens/allowed_tokens.txt \
               mp3-joiner
           '
