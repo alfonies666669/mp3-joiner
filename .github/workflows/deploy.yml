@@ -34,6 +34,7 @@ jobs:
               --name mp3joiner \
               -p 5001:5001 \
               -v ~/mp3-joiner-logs:/var/logs/mp3_joiner \
+              -v ~/mp3-tokens:/app/tokens \
               -e USER_LOG_PATH=/var/logs/mp3_joiner \
               mp3-joiner
           '
