@@ -80,6 +80,9 @@ mypy: $(VENV)
 		echo "mypy not installed. Run 'make install-dev' to add it."; \
 	fi
 
+lint-pylint:
+    @.venv/bin/pylint app.py tools logger --rcfile=.pylintrc || true
+
 test: $(VENV)
 	$(BIN)/pytest -q
 

@@ -1,3 +1,5 @@
+"""Flask-приложение для объединения MP3: маршруты, конфиг, и склейка через utils."""
+
 import os
 import time
 import shutil
@@ -35,11 +37,11 @@ RATE_LIMIT_MAX_REQUESTS = int(os.getenv("RATE_LIMIT_MAX_REQUESTS", "20"))
 
 # ---- Extensions / helpers ----
 try:
-    token_manager = IPGeoTokenManager(token_file=TOKEN_FILE_PATH, logger=user_logger)
-    app.register_blueprint(token_manager.api_blueprint(), url_prefix="/api")
-except Exception as e:
-    token_manager = None
-    app_logger.warning("Token API disabled: %s", e)
+    TOKEN_MANAGER = IPGeoTokenManager(token_file=TOKEN_FILE_PATH, logger=user_logger)
+    app.register_blueprint(TOKEN_MANAGER.api_blueprint(), url_prefix="/api")
+except Exception as err:
+    TOKEN_MANAGER = None
+    app_logger.warning("Token API disabled: %s", err)
 
 limiter = RateLimiter(RATE_LIMIT_WINDOW_SEC, RATE_LIMIT_MAX_REQUESTS)
 FFMPEG_AVAILABLE = ffmpeg_ok()
@@ -51,6 +53,7 @@ app.register_error_handler(413, handle_413(MAX_CONTENT_LENGTH))
 # ---- Routes ----
 @app.route("/healthz", methods=["GET"])
 def healthz():
+    """Healthcheck: ffmpeg/лимиты/конфиг."""
     return (
         jsonify(
             {
@@ -67,6 +70,10 @@ def healthz():
 
 @app.route("/")
 def index():
+    """
+    Главная страница приложения.
+    Возвращает HTML-шаблон главной страницы.
+    """
     ensure_csrf()
     ip = request.remote_addr
     if user_logger:
@@ -78,13 +85,18 @@ def index():
 
 @app.route("/how-it-works")
 def how_it_works():
+    """
+    Страница "Как это работает".
+    Возвращает HTML-шаблон страницы с описанием работы сервиса.
+    """
     ensure_csrf()
     return render_template("how-it-works.html", csrf_token=session["csrf_token"])
 
 
 @app.route("/merge", methods=["POST"])
-@auth_bearer_or_same_origin_csrf(token_manager, ALLOWED_ORIGIN)
-def merge_files():
+@auth_bearer_or_same_origin_csrf(TOKEN_MANAGER, ALLOWED_ORIGIN)
+def merge_files():  # pylint: disable=too-many-locals
+    """POST /merge: принимает файлы, склеивает группами и отдаёт zip."""
     start_time = time.time()
 
     if not limiter.check():
@@ -143,12 +155,12 @@ def merge_files():
 
         return send_file(archive_path, as_attachment=True, download_name="merged_files.zip", mimetype="application/zip")
 
-    except Exception as E:
-        app_logger.error("Error during merging files: %s", E)
+    except Exception as err:
+        app_logger.error("Error during merging files: %s", err)
         if user_logger:
             user_logger.error(
                 "MP3 merge fail",
-                extra={"extra": {"ip": ip_addr, "files": len(files), "status": "fail", "reason": str(E)}},
+                extra={"extra": {"ip": ip_addr, "files": len(files), "status": "fail", "reason": str(err)}},
             )
         return jsonify({"error": "Internal server error"}), 500
 
