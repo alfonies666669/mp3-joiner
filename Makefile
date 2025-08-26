@@ -13,8 +13,8 @@ SRC := app.py tools logger
 TESTS := tests
 
 ifneq (,$(wildcard .env))
-	include .env
-	export $(shell sed -n 's/^\([^#][A-Za-z_0-9]*\)=.*/\1/p' .env)
+    include .env
+    export
 endif
 
 # ---------- Phony ----------
