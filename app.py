@@ -9,12 +9,14 @@ from flask_compress import Compress
 from werkzeug.middleware.proxy_fix import ProxyFix
 from flask import Flask, Response, jsonify, request, session, send_file, render_template, after_this_request
 
+from app_version import __version__
+
+from logger.logger import app_logger, user_logger
+
 from tools.http import handle_413
 from tools.system import ffmpeg_ok
-from app_version import __version__
 from tools.limits import RateLimiter
 from tools.api_auth import IPGeoTokenManager
-from logger.logger import app_logger, user_logger
 from tools.validation import validate_merge_request
 from tools.security import ensure_csrf, auth_bearer_or_same_origin_csrf
 from tools.utils import create_zip, saving_files, check_files_are_mp3, smart_merge_mp3_files
