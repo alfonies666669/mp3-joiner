@@ -21,26 +21,33 @@ jobs:
           ssh-keyscan -H ${{ secrets.HOST }} >> ~/.ssh/known_hosts
 
       - name: Deploy via SSH
-        env:
-          TAG: ${{ github.event.inputs.image_tag }}
         run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.USER }}@${{ secrets.HOST }} <<'EOF'
+          ssh -i ~/.ssh/id_rsa ${{ secrets.USER }}@${{ secrets.HOST }} <<EOF
           set -e
           APP_DIR=/srv/mp3-joiner
           APP_NAME=mp3-joiner
-          IMAGE="ghcr.io/${{ github.repository }}:${TAG}"
 
-          if [ -n "${{ secrets.GHCR_USERNAME }}" ] && [ -n "${{ secrets.GHCR_TOKEN }}" ]; then
-            echo "${{ secrets.GHCR_TOKEN }}" | docker login ghcr.io -u "${{ secrets.GHCR_USERNAME }}" --password-stdin
+          TAG="${{ github.event.inputs.image_tag }}"
+          GHCR_USERNAME="${{ secrets.GHCR_USERNAME }}"
+          GHCR_TOKEN="${{ secrets.GHCR_TOKEN }}"
+          REPO="${{ github.repository }}"
+          IMAGE="ghcr.io/${REPO}:${TAG}"
+
+          if [ -n "$GHCR_USERNAME" ] && [ -n "$GHCR_TOKEN" ]; then
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
           fi
 
           mkdir -p "$APP_DIR"
           cd "$APP_DIR"
 
+          echo "Using image: $IMAGE"
+          docker pull "$IMAGE" || true
+
           export TAG="${TAG:-latest}"
+
           docker compose -f docker-compose.prod.yml pull
           docker compose -f docker-compose.prod.yml up -d
 
           sleep 3
-          curl -fsS http://127.0.0.1:5001/healthz || (docker logs \$(docker ps -q --filter name=${APP_NAME}) && exit 1)
+          curl -fsS http://127.0.0.1:5001/healthz || (docker ps -a; docker logs \$(docker ps -q --filter name=${APP_NAME}) ; exit 1)
           EOF
