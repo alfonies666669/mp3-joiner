@@ -1,6 +1,17 @@
+[project]
+name = "mp3-joiner"
+version = "0.1.0"
+description = "Web-сервис для объединения MP3 файлов с CSRF/Bearer защитой"
+requires-python = ">=3.13"
+authors = [
+    { name = "Arkhipov Alexandr", email = "feedbackmp3joiner@gmail.com" }
+]
+readme = "README.md"
+license = { text = "MIT" }
+
 [tool.black]
 line-length = 120
-target-version = ['py313']
+target-version = ["py313"]
 
 [tool.isort]
 profile = "black"
@@ -13,8 +24,22 @@ known_first_party = ["tools", "logger", "tests", "app"]
 [tool.ruff]
 line-length = 120
 target-version = "py313"
-select = ["E", "F", "UP", "B", "C4", "SIM", "PL"]
-ignore = ["E501", "PLR2004"]
+
+select = [
+    "E", # pycodestyle errors
+    "F", # pyflakes
+    "UP", # pyupgrade
+    "B", # bugbear
+    "C4", # comprehensions
+    "SIM", # simplify
+    "PL"   # pylint
+]
+
+ignore = [
+    "E501", # line too long
+    "PLR2004", # magic value comparisons
+]
+
 fix = true
 
 [tool.mypy]
@@ -22,11 +47,17 @@ python_version = "3.13"
 warn_unused_ignores = true
 warn_redundant_casts = true
 warn_unreachable = true
-disallow_untyped_defs = false
-disallow_incomplete_defs = false
 no_implicit_optional = true
 pretty = true
 exclude = '(^\.venv|^tests/|^build|^dist)'
+
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+
 # [[tool.mypy.overrides]]
 # module = ["tools.security", "tools.limits", "tools.system", "tools.http"]
 # disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+addopts = "-v --tb=short"
+testpaths = ["tests"]
