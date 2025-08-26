@@ -2,40 +2,123 @@ name: Deploy to VPS
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
 
 jobs:
   deploy:
+    name: SSH deploy to VPS
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout (meta only)
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Copy SSH key
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.HOST }} >> ~/.ssh/known_hosts
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script_stop: true
+          script: |
+            set -euo pipefail
 
-      - name: Deploy via SSH
-        run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.USER }}@${{ secrets.HOST }} '
-            set -e
-            cd ~/mp3-joiner
-            mkdir -p ~/mp3-joiner-logs
-            git pull origin main
-            docker build -t mp3-joiner .
-            docker stop mp3joiner || true
-            docker rm mp3joiner || true
-            docker run -d \
-              --name mp3joiner \
-              -p 5001:5001 \
-              -v ~/mp3-joiner-logs:/var/logs/mp3_joiner \
-              -v ~/mp3-tokens:/app/tokens \
+            APP_DIR="$HOME/mp3-joiner"
+            LOG_DIR="$HOME/mp3-joiner-logs"
+            TOKENS_DIR="$HOME/mp3-tokens"
+
+            # Порты: боевой и временный (для health-check перед свитчем)
+            PORT_MAIN=5001
+            PORT_CANARY=5002
+
+            # Теги образа
+            GIT_SHA="$(git -C "$APP_DIR" rev-parse --short HEAD 2>/dev/null || echo unknown)"
+            NEW_TAG="mp3-joiner:${GIT_SHA}"
+            FINAL_TAG="mp3-joiner:latest"
+
+            echo ">>> Prepare dirs"
+            mkdir -p "$APP_DIR" "$LOG_DIR" "$TOKENS_DIR"
+
+            echo ">>> Pull updates"
+            if [ -d "$APP_DIR/.git" ]; then
+              git -C "$APP_DIR" fetch --all --prune
+              git -C "$APP_DIR" checkout main
+              git -C "$APP_DIR" reset --hard origin/main
+            else
+              git clone --branch main --depth 1 "https://github.com/${{ github.repository }}.git" "$APP_DIR"
+            fi
+
+            echo ">>> Build image"
+            cd "$APP_DIR"
+            docker build -t "$NEW_TAG" .
+
+            echo ">>> Start canary container on :$PORT_CANARY"
+            # Остановим и удалим прошлый canary, если остался
+            docker rm -f mp3joiner_next 2>/dev/null || true
+
+            docker run -d --rm \
+              --name mp3joiner_next \
+              -p ${PORT_CANARY}:5001 \
+              -v "$LOG_DIR":/var/logs/mp3_joiner \
+              -v "$TOKENS_DIR":/app/tokens \
               -e USER_LOG_PATH=/var/logs/mp3_joiner \
               -e TOKEN_FILE_PATH=/app/tokens/allowed_tokens.txt \
-              mp3-joiner
-          '
+              -e SECRET_KEY='${{ secrets.ENV_SECRET_KEY }}' \
+              -e ALLOWED_ORIGIN='${{ secrets.ENV_ALLOWED_ORIGIN }}' \
+              "$NEW_TAG"
+
+            echo ">>> Wait for health (canary)"
+            for i in $(seq 1 30); do
+              code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:${PORT_CANARY}/healthz || true)"
+              if [ "$code" = "200" ]; then
+                echo "Healthy"; break
+              fi
+              sleep 1
+            done
+            if [ "${code:-}" != "200" ]; then
+              echo "Canary didn't become healthy. Logs:"
+              docker logs mp3joiner_next || true
+              exit 1
+            fi
+
+            echo ">>> Stop old container (if any)"
+            docker rm -f mp3joiner 2>/dev/null || true
+
+            echo ">>> Start final container on :$PORT_MAIN"
+            docker run -d --rm \
+              --name mp3joiner \
+              -p ${PORT_MAIN}:5001 \
+              -v "$LOG_DIR":/var/logs/mp3_joiner \
+              -v "$TOKENS_DIR":/app/tokens \
+              -e USER_LOG_PATH=/var/logs/mp3_joiner \
+              -e TOKEN_FILE_PATH=/app/tokens/allowed_tokens.txt \
+              -e SECRET_KEY='${{ secrets.ENV_SECRET_KEY }}' \
+              -e ALLOWED_ORIGIN='${{ secrets.ENV_ALLOWED_ORIGIN }}' \
+              "$NEW_TAG"
+
+            echo ">>> Final health check"
+            for i in $(seq 1 30); do
+              code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:${PORT_MAIN}/healthz || true)"
+              if [ "$code" = "200" ]; then
+                echo "Final healthy"; break
+              fi
+              sleep 1
+            done
+            if [ "${code:-}" != "200" ]; then
+              echo "Final container unhealthy, rolling back."
+              docker logs mp3joiner || true
+              # Оставляем canary жить на 5002 для диагностики
+              exit 1
+            fi
+
+            echo ">>> Cleanup canary & tag latest"
+            docker rm -f mp3joiner_next 2>/dev/null || true
+            docker tag "$NEW_TAG" "$FINAL_TAG"
+
+            echo ">>> Done"
