@@ -84,22 +84,30 @@ jobs:
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
-      - name: Build image
+      - name: Build image (load to local Docker)
         uses: docker/build-push-action@v6
         with:
           context: .
-          push: false
           tags: mp3-joiner:test
+          load: true
+          push: false
+          platforms: linux/amd64
 
       - name: Run container
         run: |
           docker run -d --rm -p 5001:5001 --name mp3joiner \
             -e SECRET_KEY=test \
+            -e API_TOKENS_REQUIRED=false \
+            -e USER_LOG_PATH=/var/logs/mp3_joiner \
+            -e TOKEN_FILE_PATH=/app/tokens/allowed_tokens.txt \
             mp3-joiner:test
           sleep 5
-          curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:5001/ | grep 200
-          curl -s http://127.0.0.1:5001/healthz | jq .
-        shell: bash
+          test "$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:5001/)" = "200"
+          curl -sf http://127.0.0.1:5001/healthz | grep -q '"status":"ok"'
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker logs mp3joiner || true
 
       - name: Stop container
         if: always()
