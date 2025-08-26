@@ -1,26 +1,33 @@
-name: CI Pipeline
+name: CI
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
-    branches:
-      - main
+    branches: [ main ]
+  push:
+    branches: [ main ]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  lint-test:
-    name: Lint, Format Check & Tests
+  test-and-lint:
+    name: Tests + Coverage + Linters
     runs-on: ubuntu-latest
 
+    env:
+      SECRET_KEY: test-secret
+      API_TOKENS_REQUIRED: "false"
+      ALLOWED_ORIGIN: http://localhost
+
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: "3.13"
 
       - name: Upgrade pip
         run: python -m pip install --upgrade pip
@@ -29,51 +36,78 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements*.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      - name: Install dependencies
+      - name: Install deps
         run: |
           pip install -r requirements.txt
-          pip install pytest isort black pylint
+          pip install -r requirements-dev.txt
+          pip install pytest-cov
 
-      - name: Run Black Check
+      - name: Pytest (with coverage)
+        run: |
+          pytest -v --maxfail=1 \
+            --cov=tools --cov=app --cov=logger \
+            --cov-report=term-missing \
+            --cov-report=xml:coverage.xml
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-xml
+          path: coverage.xml
+
+      - name: Black (check)
         run: black --check tools tests app.py
 
-      - name: Run isort Check
+      - name: isort (check)
         run: isort --check-only tools tests app.py
 
-      - name: Run Pylint
-        run: pylint tools tests app.py
-        continue-on-error: true
+      - name: Ruff (lint+format check)
+        run: |
+          ruff check .
+          ruff format --check .
 
-      - name: Run Pytest
-        run: pytest -v
+      - name: Pylint (project files only)
+        run: |
+          pylint app.py tools logger tests --jobs=2
 
   docker-build-test:
-    name: Build & Test Docker Image
+    name: Docker build & smoke test
     runs-on: ubuntu-latest
-    needs: lint-test
+    needs: test-and-lint
+
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up QEMU (for multiarch)
-        uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Build image (load to local Docker)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          tags: mp3-joiner:test
+          load: true
+          push: false
+          platforms: linux/amd64
 
-      - name: Build Docker image
+      - name: Run container
         run: |
-          docker build -t test-mp3-joiner .
-
-      - name: Run container & basic healthcheck
-        run: |
-          docker run -d --rm -p 5001:5001 --name mp3joiner test-mp3-joiner
+          docker run -d --rm -p 5001:5001 --name mp3joiner \
+            -e SECRET_KEY=test \
+            -e API_TOKENS_REQUIRED=false \
+            -e USER_LOG_PATH=/var/logs/mp3_joiner \
+            -e TOKEN_FILE_PATH=/app/tokens/allowed_tokens.txt \
+            mp3-joiner:test
           sleep 5
-          curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:5001/ | grep 200
+          test "$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:5001/)" = "200"
+          curl -sf http://127.0.0.1:5001/healthz | grep -q '"status":"ok"'
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker logs mp3joiner || true
 
       - name: Stop container
         if: always()

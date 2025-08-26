@@ -7,8 +7,9 @@ from zipfile import ZipFile
 
 from mutagen.mp3 import MP3, HeaderNotFoundError
 
-from tools.merge_utils import Merge
 from logger.logger import app_logger
+
+from tools.merge_utils import Merge
 
 
 def check_files_are_mp3(files) -> None | tuple:

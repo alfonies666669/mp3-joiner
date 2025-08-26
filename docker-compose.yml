@@ -1,20 +1,26 @@
-version: '3.8'
+version: "3.9"
 
 services:
   app:
-    build: .
+    image: ghcr.io/alfonies666669/mp3-joiner:${TAG:-latest}
+    container_name: mp3joiner
     ports:
-      - "5000:5000"
-    environment:
-      - FLASK_ENV=production
-      - PORT=5000
-    deploy:
-      replicas: 3
-      resources:
-        limits:
-          cpus: "0.5"
-          memory: "512M"
+      - "5001:5001"
+    env_file:
+      - .env
     volumes:
-      - ./uploads:/app/uploads
-      - ./merged:/app/merged
+      - /var/mp3joiner/logs:/var/logs/mp3_joiner:rw
+      - /var/mp3joiner/tokens:/app/tokens:ro
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://127.0.0.1:5001/healthz" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     restart: always
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    ulimits:
+      nofile: 4096

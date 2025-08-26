@@ -1,3 +1,10 @@
+"""Логирование для приложения.
+
+Содержит два логгера:
+- app_logger: стандартный логгер с ротацией файлов.
+- user_logger: JSON-логгер для действий пользователей (если указан путь через USER_LOG_PATH).
+"""
+
 import os
 import json
 import logging
@@ -19,6 +26,8 @@ app_logger.propagate = False
 
 # --- User logger (JSON, only if path set) ---
 class JsonFileHandler(logging.FileHandler):
+    """Обработчик логов, записывающий события в файл в формате JSON."""
+
     def emit(self, record):
         try:
             log_entry = self.format(record)
@@ -29,6 +38,8 @@ class JsonFileHandler(logging.FileHandler):
 
 
 class JsonFormatter(logging.Formatter):
+    """Форматтер, сериализующий записи логов в JSON."""
+
     def format(self, record):
         data = {
             "timestamp": self.formatTime(record, self.datefmt),
@@ -42,13 +53,13 @@ class JsonFormatter(logging.Formatter):
 
 
 def get_user_logger():
+    """Создаёт JSON-логгер для действий пользователей, если задан USER_LOG_PATH.
+
+    :return: logging.Logger или None, если путь не задан или логгер не удалось создать."""
     base_path = os.environ.get("USER_LOG_PATH")
     if not base_path:
         return None
-    if os.path.isdir(base_path):
-        log_file_path = os.path.join(base_path, "user_actions.json")
-    else:
-        log_file_path = base_path
+    log_file_path = os.path.join(base_path, "user_actions.json") if os.path.isdir(base_path) else base_path
     logger = logging.getLogger("user_actions")
     if not logger.handlers:
         try:

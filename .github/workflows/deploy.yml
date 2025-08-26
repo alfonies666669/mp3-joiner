@@ -1,41 +1,76 @@
 name: Deploy to VPS
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Tag to deploy (e.g. latest or 1.0.0)"
+        required: true
+        default: "latest"
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Copy SSH key
+      - name: Prepare SSH
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
           ssh-keyscan -H ${{ secrets.HOST }} >> ~/.ssh/known_hosts
 
-      - name: Deploy via SSH
+      - name: Deploy over SSH
+        env:
+          TAG: ${{ github.event.inputs.image_tag }}
+          REPO: ${{ github.repository }}
+          GHCR_USERNAME: ${{ secrets.GHCR_USERNAME }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          ALLOWED_ORIGIN: ${{ secrets.ALLOWED_ORIGIN }}
         run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.USER }}@${{ secrets.HOST }} '
-            set -e
-            cd ~/mp3-joiner
-            mkdir -p ~/mp3-joiner-logs
-            git pull origin main
-            docker build -t mp3-joiner .
-            docker stop mp3joiner || true
-            docker rm mp3joiner || true
-            docker run -d \
-              --name mp3joiner \
-              -p 5001:5001 \
-              -v ~/mp3-joiner-logs:/var/logs/mp3_joiner \
-              -v ~/mp3-tokens:/app/tokens \
-              -e USER_LOG_PATH=/var/logs/mp3_joiner \
-              -e TOKEN_FILE_PATH=/app/tokens/allowed_tokens.txt \
-              mp3-joiner
-          '
+          ssh -i ~/.ssh/id_rsa ${{ secrets.USER }}@${{ secrets.HOST }} <<'EOF'
+          set -euo pipefail
+
+          APP_NAME="mp3-joiner"
+          REPO_LOWER=$(echo "${REPO}" | tr '[:upper:]' '[:lower:]')
+          IMAGE="ghcr.io/${REPO_LOWER}:${TAG}"
+
+          echo "Logging in to GHCR..."
+          echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
+
+          echo "Pulling image: ${IMAGE}"
+          docker pull "${IMAGE}"
+
+          echo "Stopping old container (if any)"
+          docker stop "${APP_NAME}" || true
+          docker rm   "${APP_NAME}" || true
+
+          mkdir -p ~/mp3-joiner-logs ~/mp3-tokens
+
+          cat > ~/mp3-joiner.env <<ENV
+          SECRET_KEY=${SECRET_KEY}
+          ALLOWED_ORIGIN=${ALLOWED_ORIGIN}
+          USER_LOG_PATH=/var/logs/mp3_joiner
+          LOG_DIR=/var/logs/mp3_joiner
+          TOKEN_FILE_PATH=/app/tokens/allowed_tokens.txt
+          API_TOKENS_REQUIRED=true
+          GEO_LOOKUP_ENABLED=false
+          RATE_LIMIT_WINDOW_SEC=60
+          RATE_LIMIT_MAX_REQUESTS=20
+          MAX_FILES=50
+          MAX_PER_FILE_MB=50
+          MAX_CONTENT_LENGTH=104857600
+          ENV
+
+          echo "Starting container..."
+          docker run -d --name "${APP_NAME}" \
+            --restart=unless-stopped \
+            -p 5001:5001 \
+            --env-file ~/mp3-joiner.env \
+            -v ~/mp3-joiner-logs:/var/logs/mp3_joiner \
+            -v ~/mp3-tokens:/app/tokens \
+            "${IMAGE}"
+
+          echo "Deployed ${IMAGE}"
+          EOF

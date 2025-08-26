@@ -1,3 +1,5 @@
+"""Модуль для нормализации и объединения MP3-файлов"""
+
 import os
 import re
 import tempfile
@@ -53,6 +55,7 @@ class Merge:
         filename = re.sub(r"^\.+", "", filename)
         filename = re.sub(r"\.+$", "", filename)
         filename = re.sub(r"__+", "_", filename)
+        filename = re.sub(r"\.{2,}(\.[A-Za-z0-9]{1,5})$", r"\1", filename)
         return filename
 
     @staticmethod
@@ -83,7 +86,7 @@ class Merge:
                 output_path,
                 "-y",
             ]
-            result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+            result = subprocess.run(command, capture_output=True, check=False)
             if result.returncode != 0:
                 app_logger.error("[normalize_mp3] Error for %s: %s", file_path, result.stderr.decode("utf-8"))
                 return idx, None
@@ -150,7 +153,7 @@ class Merge:
                 list_path = f.name
             try:
                 command = ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", list_path, "-c", "copy", output_path]
-                result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+                result = subprocess.run(command, capture_output=True, check=False)
                 if result.returncode != 0:
                     app_logger.error("FFmpeg error for group %d: %s", idx, result.stderr.decode())
                     continue
