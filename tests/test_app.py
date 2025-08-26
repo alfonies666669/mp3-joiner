@@ -1,3 +1,5 @@
+"""Интеграционные тесты Flask-приложения: healthz, index, /merge и обработчик 413."""
+
 import io
 import os
 import zipfile
@@ -9,11 +11,13 @@ import app as app_module
 from tools.http import handle_413
 
 
-def _origin_headers():
+def _origin_headers() -> dict[str, str]:
+    """Заголовок Origin, имитирующий same-origin запрос с localhost."""
     return {"Origin": "http://localhost"}
 
 
 def test_healthz_ok(client):
+    """GET /healthz — здоров, отдает базовую информацию."""
     r = client.get("/healthz")
     assert r.status_code == 200
     data = r.get_json()
@@ -24,21 +28,22 @@ def test_healthz_ok(client):
 
 
 def test_index_sets_csrf_and_renders(client):
+    """GET / — в сессии появляется csrf_token, страница рендерится."""
     r = client.get("/")
     assert r.status_code == 200
-    # csrf кладется в сессию; сам HTML может содержать токен, но проверим сессию
     with client.session_transaction() as sess:
         assert "csrf_token" in sess
 
 
 def test_merge_400_no_files(client):
+    """POST /merge без файлов → 400 и сообщение об ошибке."""
     with client.session_transaction() as sess:
         sess["csrf_token"] = "test-csrf"
 
     resp = client.post(
         "/merge",
         data={"count": "2", "csrf_token": "test-csrf"},
-        headers={"Origin": "http://localhost"},
+        headers=_origin_headers(),
         content_type="multipart/form-data",
     )
     assert resp.status_code == 400
@@ -46,6 +51,7 @@ def test_merge_400_no_files(client):
 
 
 def test_merge_429_rate_limited(client):
+    """POST /merge при срабатывании rate-limit → 429."""
     old_check = app_module.limiter.check
     app_module.limiter.check = lambda: False
     try:
@@ -55,7 +61,7 @@ def test_merge_429_rate_limited(client):
         resp = client.post(
             "/merge",
             data={"count": "2", "csrf_token": "test-csrf"},
-            headers={"Origin": "http://localhost"},
+            headers=_origin_headers(),
             content_type="multipart/form-data",
         )
         assert resp.status_code == 429
@@ -64,16 +70,17 @@ def test_merge_429_rate_limited(client):
         app_module.limiter.check = old_check
 
 
-def test_merge_happy_path_minimal_pipeline(client, tmp_path):
+def test_merge_happy_path_minimal_pipeline(client, tmp_path):  # pylint: disable=unused-argument
+    """Полный happy-path /merge с моками валидации, мерджа и zip-а."""
     with client.session_transaction() as sess:
         sess["csrf_token"] = "test-csrf"
 
-    # in-memory mp3
+    # in-memory «mp3»
     f1 = io.BytesIO(b"ID3\x00\x00\x00aaaa")
     f2 = io.BytesIO(b"ID3\x00\x00\x00bbbb")
 
-    def fake_validate(req, max_files, max_mb, ffmpeg_ok, _check_fn) -> tuple:
-        # Возвращаем FileStorage
+    def fake_validate(_req, _max_files, _max_mb, _ffmpeg_ok, _check_fn) -> tuple:
+        """Мокаем validate_merge_request: отдаем 2 FileStorage и успех."""
         return (
             [
                 FileStorage(stream=f1, filename="1.mp3", content_type="audio/mpeg"),
@@ -84,13 +91,15 @@ def test_merge_happy_path_minimal_pipeline(client, tmp_path):
             None,
         )
 
-    def fake_merge(file_paths, count, merged_folder):
+    def fake_merge(_file_paths, _count, merged_folder):
+        """Мокаем smart_merge_mp3_files: создаем один «мерджнутый» mp3."""
         out1 = os.path.join(merged_folder, "merged_1.mp3")
         with open(out1, "wb") as f:
             f.write(b"merged")
         return [out1]
 
     def fake_zip(merged_folder, merged_files):
+        """Мокаем create_zip: создаем реальный zip с переданными файлами."""
         zip_path = os.path.join(merged_folder, "merged_files.zip")
         with zipfile.ZipFile(zip_path, "w") as z:
             for p in merged_files:
@@ -111,13 +120,10 @@ def test_merge_happy_path_minimal_pipeline(client, tmp_path):
             ],
         }
 
-        resp = client.post(
-            "/merge",
-            data=data,
-            headers={"Origin": "http://localhost"},
-        )
+        resp = client.post("/merge", data=data, headers=_origin_headers())
 
         if resp.status_code != 200:
+            # Удобно печатать ответ при падении
             print("Body:\n", resp.get_data(as_text=True))
 
         assert resp.status_code == 200
@@ -126,7 +132,8 @@ def test_merge_happy_path_minimal_pipeline(client, tmp_path):
         assert len(resp.data) > 0
 
 
-def test_merge_413_error_handler(client):
+def test_merge_413_error_handler():
+    """Проверяем зарегистрированный error handler 413 — формирует корректный JSON."""
     with app_module.app.app_context():
         handler = handle_413(app_module.MAX_CONTENT_LENGTH)
         resp = handler(None)

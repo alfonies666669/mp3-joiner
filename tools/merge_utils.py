@@ -1,3 +1,5 @@
+"""Модуль для нормализации и объединения MP3-файлов"""
+
 import os
 import re
 import tempfile

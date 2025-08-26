@@ -1,3 +1,13 @@
+"""Утилиты для проверки токенов и (опционально) получения геоданных по IP.
+
+Модуль содержит класс `IPGeoTokenManager`, который:
+- загружает токены доступа из файла,
+- проверяет Bearer-токены (константно-временным сравнением),
+- (опционально) делает geo-lookup по IP,
+- предоставляет Flask-Blueprint с /api/health, /api/test, /api/reload-tokens,
+- даёт декоратор для защиты эндпоинтов по Bearer.
+"""
+
 import os
 import hmac
 import ipaddress
@@ -11,16 +21,16 @@ from logger.logger import user_logger
 
 
 def _bool(env: str, default: bool) -> bool:
+    """Читает булеву переменную окружения: '1,true,yes,y,on' → True, иначе False."""
     v = os.getenv(env, str(default)).strip().lower()
     return v in ("1", "true", "yes", "y", "on")
 
 
 class IPGeoTokenManager:
-    """
-    Token + optional geolocation helper with safe logging and env-driven behavior.
-    """
+    """Менеджер токенов и геоданных: загрузка/перезагрузка токенов, валидация Bearer, geo-lookup, Blueprint."""
 
     def __init__(self, token_file: str | None = None, logger=None):
+        """Инициализирует менеджер: читает конфиг из env, настраивает HTTP-сессию и грузит токены (если включено)."""
         self.logger = logger or user_logger
         self.token_file = token_file or os.getenv("TOKEN_FILE_PATH")
         self.tokens_required = _bool("API_TOKENS_REQUIRED", True)
@@ -35,7 +45,7 @@ class IPGeoTokenManager:
         self._init_tokens()
 
     def _log(self, event: str, level: str = "info", **kwargs):
-        """Logging"""
+        """Логирует событие через переданный логгер (или stdout), добавляя структуру `extra`."""
         payload = {"event": event, **kwargs}
         lg = self.logger
         if lg and hasattr(lg, level):
@@ -45,7 +55,7 @@ class IPGeoTokenManager:
 
     @staticmethod
     def _build_http() -> requests.Session:
-        """HTTP session with retry"""
+        """Создаёт requests.Session с ретраями для GET (429/5xx), чтобы geo-lookup был устойчивее."""
         s = requests.Session()
         retries = Retry(
             total=2,
@@ -60,13 +70,7 @@ class IPGeoTokenManager:
     # ---------- IP helpers ----------
     @staticmethod
     def _client_ip() -> str:
-        """
-        Клиентский IP:
-        1) X-Forwarded-For (первый адрес)
-        2) X-Real-IP
-        3) access_route[0] (если ProxyFix/WSGI что-то положили)
-        4) REMOTE_ADDR
-        """
+        """Возвращает IP клиента в приоритете: X-Forwarded-For → X-Real-IP → access_route → REMOTE_ADDR."""
         xff = request.headers.get("X-Forwarded-For")
         if xff:
             first = xff.split(",")[0].strip()
@@ -85,6 +89,7 @@ class IPGeoTokenManager:
 
     @staticmethod
     def _is_private(ip: str) -> bool:
+        """Возвращает True для приватных/loopback/reserved IP, иначе False. Некорректный IP трактуется как приватный."""
         try:
             addr = ipaddress.ip_address(ip)
             return addr.is_private or addr.is_loopback or addr.is_reserved
@@ -92,7 +97,7 @@ class IPGeoTokenManager:
             return True
 
     def _init_tokens(self):
-        """Tokens"""
+        """Инициализирует список токенов из файла. Если токены обязательны и файл не найден — бросает исключение."""
         if self.token_file and os.path.exists(self.token_file):
             self._load_tokens(force=True)
         else:
@@ -102,7 +107,7 @@ class IPGeoTokenManager:
 
     @staticmethod
     def _parse_tokens(text: str) -> set[str]:
-        """Tokens parse"""
+        """Парсит токены из текста: по одному в строке, пустые и строки с '#' пропускаются."""
         tokens = set()
         for raw_line in text.splitlines():
             line = raw_line.strip()
@@ -112,7 +117,7 @@ class IPGeoTokenManager:
         return tokens
 
     def _load_tokens(self, force: bool = False):
-        """Token loads"""
+        """Перечитывает файл токенов при изменении mtime (или всегда при force=True) и обновляет `allowed_tokens`."""
         if not self.token_file:
             return
         try:
@@ -130,28 +135,29 @@ class IPGeoTokenManager:
             self._log("tokens_load_failed", level="error", error=str(e))
 
     def reload_tokens(self):
-        """Token reloads"""
+        """Явно перечитывает файл токенов (force) и пишет в лог количество доступных токенов."""
         self._load_tokens(force=True)
         self._log("tokens_reloaded", count=len(self.allowed_tokens))
 
     @staticmethod
     def _extract_bearer() -> str | None:
+        """Извлекает Bearer-токен из заголовка Authorization. Возвращает токен или None."""
         auth = request.headers.get("Authorization", "")
         if not auth.startswith("Bearer "):
             return None
         return auth.replace("Bearer ", "", 1).strip()
 
     def is_valid_token(self, token: str | None) -> bool:
+        """Проверяет валидность токена. При отключённой аутентификации всегда True; иначе — сравнение с allow-листом."""
         if not self.tokens_required:
             return True  # auth disabled
         if not token:
             return False
-        # constant-time checks against the set
-        # We can't compare against all in true constant time without hashing.
-        # For simplicity, compare exact string using compare_digest over each candidate.
         return any(hmac.compare_digest(t, token) for t in self.allowed_tokens)
 
     def require_api_token(self, f):
+        """Flask-декоратор: требует валидный Bearer-токен. Иначе 401/403 и логирование причины."""
+
         @wraps(f)
         def decorated(*args, **kwargs):
             auth = request.headers.get("Authorization", "")
@@ -172,6 +178,7 @@ class IPGeoTokenManager:
 
     # ---------- Geo ----------
     def get_geo_info(self, ip: str) -> dict:
+        """Возвращает geo-информацию для публичного IP через настроенный провайдер (если geo включён). Иначе {}."""
         if not self.geo_enabled:
             return {}
         if self._is_private(ip):
@@ -189,6 +196,7 @@ class IPGeoTokenManager:
         return {}
 
     def log_visitor(self, log_geo: bool = True) -> tuple[str, dict]:
+        """Логирует визит клиента; опционально делает geo-lookup. Возвращает (ip, geo_dict)."""
         ip = self._client_ip()
         geo = self.get_geo_info(ip) if log_geo else {}
         self._log("visitor", ip=ip, geo=bool(geo))
@@ -196,6 +204,7 @@ class IPGeoTokenManager:
 
     # ---------- Blueprint ----------
     def api_blueprint(self) -> Blueprint:
+        """Создаёт Blueprint с тех. эндпоинтами: /health, /test (с защитой), /reload-tokens (с защитой)."""
         bp = Blueprint("ipgeo_token_api", __name__)
 
         @bp.route("/health", methods=["GET"])

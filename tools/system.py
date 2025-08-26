@@ -1,9 +1,15 @@
+"""System utilities: FFmpeg availability check."""
+
 import subprocess
 
 from logger.logger import app_logger
 
 
 def ffmpeg_ok() -> bool:
+    """
+    Проверяет, доступен ли ffmpeg в окружении.
+    :return: True, если утилита установлена и возвращает код 0.
+    """
     try:
         res = subprocess.run(
             ["ffmpeg", "-version"],
