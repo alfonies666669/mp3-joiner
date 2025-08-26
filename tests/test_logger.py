@@ -52,7 +52,7 @@ def test_app_logger_rotating_file_handler_created(clean_env: Path) -> None:
     assert "app.log" in getattr(rh, "baseFilename", "")
 
 
-def test_user_logger_disabled_when_env_missing(_clean_env: Path) -> None:
+def test_user_logger_disabled_when_env_missing(clean_env: Path) -> None:
     """При отсутствии USER_LOG_PATH — user_logger == None."""
     logger_module = _reload_logger_module()
     assert logger_module.user_logger is None

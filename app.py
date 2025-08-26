@@ -11,6 +11,7 @@ from flask import Flask, Response, jsonify, request, session, send_file, render_
 
 from tools.http import handle_413
 from tools.system import ffmpeg_ok
+from app_version import __version__
 from tools.limits import RateLimiter
 from tools.api_auth import IPGeoTokenManager
 from logger.logger import app_logger, user_logger
@@ -62,6 +63,7 @@ def healthz():
                 "max_content_length_mb": round(MAX_CONTENT_LENGTH / (1024 * 1024), 2),
                 "max_files": MAX_FILES,
                 "max_per_file_mb": MAX_PER_FILE_MB,
+                "version": __version__,
             }
         ),
         200,
@@ -166,5 +168,6 @@ def merge_files():  # pylint: disable=too-many-locals
 
 
 if __name__ == "__main__":
+    app_logger.info("Starting mp3-joiner %s", __version__)
     port = int(os.environ.get("PORT", "5001"))
     app.run(host="0.0.0.0", port=port, debug=True)
