@@ -84,7 +84,7 @@ def index():
         user_logger.info("Visited /", extra={"extra": {"ip": ip, "status": "visited", "type": "pageview"}})
     else:
         app_logger.warning("user_logger не инициализирован — проверь USER_LOG_PATH")
-    return render_template("index.html", csrf_token=session["csrf_token"])
+    return render_template("index.html", csrf_token=session["csrf_token"], version=__version__)
 
 
 @app.route("/how-it-works")

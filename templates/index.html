@@ -22,12 +22,6 @@
     </style>
 </head>
 <body>
-<div class="beta-banner" id="beta-banner">
-    🚀 This project is in <strong>Beta (v.2)</strong>. Your feedback is welcome!
-    <button onclick="document.getElementById('beta-banner').style.display='none'"
-            style="background: none; border: none; color: white; margin-left: 10px; cursor: pointer;">✖
-    </button>
-</div>
 <div class="container my-5">
     <h1 class="text-center mb-4">MP3 Joiner</h1>
     <form id="mergeForm" class="card p-4 shadow-sm" enctype="multipart/form-data">
@@ -50,14 +44,14 @@
     </div>
     <p class="mt-2">Merging files, please wait...</p>
 </div>
-<footer class="bg-light text-center text-lg-start mt-5">
+<footer class="bg-light text-center text-lg-start mt-5 border-top">
     <div class="container p-4">
         <div class="row">
             <div class="col-lg-6 col-md-12 mb-4 mb-md-0">
                 <h5 class="text-uppercase">Help & Documentation</h5>
                 <ul class="list-unstyled">
                     <li>
-                       <a href="/how-it-works">How does it work?</a>
+                        <a href="/how-it-works">How does it work?</a>
                     </li>
                 </ul>
             </div>
@@ -65,6 +59,11 @@
                 <h5 class="text-uppercase">Contact Us</h5>
                 <p>Email: feedbackmp3joiner@gmail.com</p>
             </div>
+        </div>
+        <hr>
+        <div class="text-muted small">
+            v{{ version }} — Powered by <a href="https://github.com/alfonies666669/mp3-joiner" target="_blank">MP3
+            Joiner</a>
         </div>
     </div>
 </footer>
