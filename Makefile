@@ -18,7 +18,7 @@ ifneq (,$(wildcard .env))
 endif
 
 # ---------- Phony ----------
-.PHONY: help init install install-dev pre-commit format format-file lint mypy test run gunicorn clean deepclean
+.PHONY: help init install install-dev pre-commit format format-file lint mypy test run gunicorn clean deepclean up down build prod-up prod-down logs
 
 # ---------- Help ----------
 help:
@@ -107,3 +107,23 @@ clean:
 
 deepclean: clean
 	rm -rf $(VENV)
+
+# ---------- Docker ----------
+
+up:
+	docker compose up --build
+
+down:
+	docker compose down
+
+build:
+	docker compose build
+
+logs:
+	docker compose logs -f app
+
+prod-up:
+	TAG=$${TAG:-latest} docker compose -f docker-compose.prod.yml up -d
+
+prod-down:
+	docker compose -f docker-compose.prod.yml down
