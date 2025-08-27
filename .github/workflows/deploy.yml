@@ -26,6 +26,7 @@ jobs:
         run: |
           ssh -i ~/.ssh/id_rsa ${{ secrets.USER }}@${{ secrets.HOST }} <<'REMOTE'
           set -euo pipefail
+
           GHCR_USER="${{ secrets.GHCR_USERNAME }}"
           GHCR_TOKEN="${{ secrets.GHCR_TOKEN }}"
           SECRET_KEY="${{ secrets.SECRET_KEY }}"
@@ -33,9 +34,14 @@ jobs:
           REPO="${{ github.repository }}"
           TAG="${TAG:-latest}"
 
-          APP_DIR="/mp3-joiner"
-          mkdir -p "${APP_DIR}/logs"
-          cd "${APP_DIR}"
+          # Всё из домашней директории
+          APP_DIR="${HOME}/mp3-joiner"
+          TOKENS_DIR="${HOME}/mp3-tokens"
+          LOGS_DIR="${APP_DIR}/logs"
+
+          mkdir -p "${APP_DIR}" "${LOGS_DIR}" "${TOKENS_DIR}"
+          # Важно: владелец логов = UID 10001 (appuser в контейнере)
+          chown -R 10001:10001 "${LOGS_DIR}"
 
           if [ -n "${GHCR_USER}" ] && [ -n "${GHCR_TOKEN}" ]; then
             echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin
@@ -44,7 +50,10 @@ jobs:
           IMAGE="ghcr.io/${REPO}:${TAG}"
           echo "Using image: ${IMAGE}"
 
-          cat > docker-compose.prod.yml <<'YML'
+          export IMAGE APP_DIR TOKENS_DIR LOGS_DIR SECRET_KEY ALLOWED_ORIGIN
+
+          # heredoc БЕЗ кавычек, чтобы подставились переменные окружения
+          cat > "${APP_DIR}/docker-compose.prod.yml" <<YML
           version: "3.9"
           services:
             app:
@@ -53,10 +62,10 @@ jobs:
               ports:
                 - "5001:5001"
               env_file:
-                - .env
+                - ${APP_DIR}/.env
               volumes:
-                - ${APP_DIR}/logs:/var/logs/mp3_joiner
-                - ${HOME}/mp3-tokens:/app/tokens:ro
+                - ${LOGS_DIR}:/var/logs/mp3_joiner
+                - ${TOKENS_DIR}:/app/tokens:ro
               restart: unless-stopped
               healthcheck:
                 test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:5001/healthz || exit 1"]
@@ -65,18 +74,17 @@ jobs:
                 retries: 3
           YML
 
-          cat > .env <<ENV
+          cat > "${APP_DIR}/.env" <<ENV
           SECRET_KEY=${SECRET_KEY}
           ALLOWED_ORIGIN=${ALLOWED_ORIGIN}
           API_TOKENS_REQUIRED=true
           GEO_LOOKUP_ENABLED=false
           LOG_DIR=/var/logs/mp3_joiner
           USER_LOG_PATH=/var/logs/mp3_joiner
+          TOKEN_FILE_PATH=/app/tokens/allowed_tokens.txt
           ENV
 
-          export IMAGE="${IMAGE}"
-          export APP_DIR="${APP_DIR}"
-
+          cd "${APP_DIR}"
           docker compose -f docker-compose.prod.yml pull
           docker compose -f docker-compose.prod.yml up -d
 
@@ -84,9 +92,7 @@ jobs:
           code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:5001/healthz || true)
           if [ "$code" != "200" ]; then
             echo "Healthcheck failed with code $code"
-            echo "Running containers:"
             docker ps -a
-            echo "Logs:"
             docker logs mp3-joiner || true
             exit 1
           fi

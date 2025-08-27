@@ -24,3 +24,4 @@ tests/
 tokens/allowed_tokens.txt
 Dockerfile
 docker-compose.yml
+static/.DS_Store
