@@ -34,13 +34,11 @@ jobs:
           REPO="${{ github.repository }}"
           TAG="${TAG:-latest}"
 
-          # Всё из домашней директории
           APP_DIR="${HOME}/mp3-joiner"
           TOKENS_DIR="${HOME}/mp3-tokens"
           LOGS_DIR="${APP_DIR}/logs"
 
           mkdir -p "${APP_DIR}" "${LOGS_DIR}" "${TOKENS_DIR}"
-          # Важно: владелец логов = UID 10001 (appuser в контейнере)
           chown -R 10001:10001 "${LOGS_DIR}"
 
           if [ -n "${GHCR_USER}" ] && [ -n "${GHCR_TOKEN}" ]; then
@@ -52,7 +50,6 @@ jobs:
 
           export IMAGE APP_DIR TOKENS_DIR LOGS_DIR SECRET_KEY ALLOWED_ORIGIN
 
-          # heredoc БЕЗ кавычек, чтобы подставились переменные окружения
           cat > "${APP_DIR}/docker-compose.prod.yml" <<YML
           version: "3.9"
           services:
