@@ -1,7 +1,12 @@
 FROM python:3.13-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    LOG_DIR=/var/logs/mp3_joiner \
+    USER_LOG_PATH=/var/logs/mp3_joiner \
+    TOKEN_FILE_PATH=/app/tokens/allowed_tokens.txt \
+    API_TOKENS_REQUIRED=true \
+    GEO_LOOKUP_ENABLED=false
 
 RUN useradd -m -u 10001 appuser
 
@@ -14,10 +19,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# код
 COPY . .
 
-# подготовим директории под логи и токены
 RUN mkdir -p /var/logs/mp3_joiner /app/tokens \
     && chown -R appuser:appuser /var/logs/mp3_joiner /app
 
