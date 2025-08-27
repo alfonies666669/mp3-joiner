@@ -70,6 +70,8 @@ jobs:
           ALLOWED_ORIGIN=${ALLOWED_ORIGIN}
           API_TOKENS_REQUIRED=true
           GEO_LOOKUP_ENABLED=false
+          LOG_DIR=/var/logs/mp3_joiner
+          USER_LOG_PATH=/var/logs/mp3_joiner
           ENV
 
           export IMAGE="${IMAGE}"
