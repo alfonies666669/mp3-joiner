@@ -21,33 +21,73 @@ jobs:
           ssh-keyscan -H ${{ secrets.HOST }} >> ~/.ssh/known_hosts
 
       - name: Deploy via SSH
+        env:
+          TAG: ${{ github.event.inputs.image_tag }}
         run: |
-          ssh -i ~/.ssh/id_rsa ${{ secrets.USER }}@${{ secrets.HOST }} <<EOF
-          set -e
-          APP_DIR=/srv/mp3-joiner
-          APP_NAME=mp3-joiner
-
-          TAG="${{ github.event.inputs.image_tag }}"
-          GHCR_USERNAME="${{ secrets.GHCR_USERNAME }}"
+          ssh -i ~/.ssh/id_rsa ${{ secrets.USER }}@${{ secrets.HOST }} <<'REMOTE'
+          set -euo pipefail
+          GHCR_USER="${{ secrets.GHCR_USERNAME }}"
           GHCR_TOKEN="${{ secrets.GHCR_TOKEN }}"
+          SECRET_KEY="${{ secrets.SECRET_KEY }}"
+          ALLOWED_ORIGIN="${{ secrets.ALLOWED_ORIGIN }}"
           REPO="${{ github.repository }}"
-          IMAGE="ghcr.io/${REPO}:${TAG}"
+          TAG="${TAG:-latest}"
 
-          if [ -n "$GHCR_USERNAME" ] && [ -n "$GHCR_TOKEN" ]; then
-          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
+          APP_DIR="/mp3-joiner"
+          mkdir -p "${APP_DIR}/logs"
+          cd "${APP_DIR}"
+
+          if [ -n "${GHCR_USER}" ] && [ -n "${GHCR_TOKEN}" ]; then
+            echo "${GHCR_TOKEN}" | docker login ghcr.io -u "${GHCR_USER}" --password-stdin
           fi
 
-          mkdir -p "$APP_DIR"
-          cd "$APP_DIR"
+          IMAGE="ghcr.io/${REPO}:${TAG}"
+          echo "Using image: ${IMAGE}"
 
-          echo "Using image: $IMAGE"
-          docker pull "$IMAGE" || true
+          cat > docker-compose.prod.yml <<'YML'
+          version: "3.9"
+          services:
+            app:
+              image: ${IMAGE}
+              container_name: mp3-joiner
+              ports:
+                - "5001:5001"
+              env_file:
+                - .env
+              volumes:
+                - ${APP_DIR}/logs:/var/logs/mp3_joiner
+                - ${HOME}/mp3-tokens:/app/tokens:ro
+              restart: unless-stopped
+              healthcheck:
+                test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:5001/healthz || exit 1"]
+                interval: 30s
+                timeout: 5s
+                retries: 3
+          YML
 
-          export TAG="${TAG:-latest}"
+          cat > .env <<ENV
+          SECRET_KEY=${SECRET_KEY}
+          ALLOWED_ORIGIN=${ALLOWED_ORIGIN}
+          API_TOKENS_REQUIRED=true
+          GEO_LOOKUP_ENABLED=false
+          ENV
+
+          export IMAGE="${IMAGE}"
+          export APP_DIR="${APP_DIR}"
 
           docker compose -f docker-compose.prod.yml pull
           docker compose -f docker-compose.prod.yml up -d
 
           sleep 3
-          curl -fsS http://127.0.0.1:5001/healthz || (docker ps -a; docker logs \$(docker ps -q --filter name=${APP_NAME}) ; exit 1)
-          EOF
+          code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:5001/healthz || true)
+          if [ "$code" != "200" ]; then
+            echo "Healthcheck failed with code $code"
+            echo "Running containers:"
+            docker ps -a
+            echo "Logs:"
+            docker logs mp3-joiner || true
+            exit 1
+          fi
+
+          echo "Deploy OK"
+          REMOTE
