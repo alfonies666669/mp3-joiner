@@ -1,0 +1,180 @@
+openapi: 3.0.3
+info:
+  title: MP3 Joiner API
+  description: |
+    REST-интерфейс для объединения MP3-файлов.
+    Основные эндпоинты доступны по Same-Origin+CSRF или Bearer-токену.
+    Внутренние эндпоинты требуют Bearer-аутентификацию.
+  version: 1.0.0
+servers:
+  - url: https://mp3-joiner.example.com
+    description: Production
+  - url: http://127.0.0.1:5001
+    description: Local development
+
+components:
+  securitySchemes:
+    CsrfCookie:
+      type: apiKey
+      in: cookie
+      name: session
+      description: Flask session cookie (Same-Origin flow)
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: ASCII
+  responses:
+    Unauthorized:
+      description: Требуется авторизация
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Неверный токен
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Error:
+      description: Ошибка сервера или клиента
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    RateLimitExceeded:
+      description: Превышен лимит запросов (rate limit)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Missing bearer token"
+
+paths:
+  /healthz:
+    get:
+      summary: Проверка статуса сервиса
+      tags: [ public ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  ffmpeg: { type: boolean }
+                  max_content_length_mb: { type: integer }
+                  max_files: { type: integer }
+                  max_per_file_mb: { type: integer }
+        '500':
+          $ref: '#/components/responses/Error'
+
+  /merge:
+    post:
+      summary: Объединить MP3-файлы
+      tags: [ public ]
+      security:
+        - CsrfCookie: [ ]
+        - BearerAuth: [ ]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [ files, count ]
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: "Один или несколько файлов .mp3"
+                count:
+                  type: integer
+                  minimum: 1
+                  description: "Число файлов для объединения в группе"
+                csrf_token:
+                  type: string
+                  description: "CSRF-токен (для Same-Origin)"
+      responses:
+        '200':
+          description: ZIP-архив c merged_*.mp3
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/Error' }
+        '429': { $ref: '#/components/responses/RateLimitExceeded' }
+        '500': { $ref: '#/components/responses/Error' }
+
+  /api/health:
+    get:
+      summary: Техническое состояние токен/гео подсистемы
+      tags: [ internal ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  tokens_required: { type: boolean }
+                  tokens_loaded: { type: integer }
+                  geo_enabled: { type: boolean }
+        '500':
+          $ref: '#/components/responses/Error'
+
+  /api/test:
+    get:
+      summary: Пинг, IP/Geo и авторизация
+      tags: [ internal ]
+      security:
+        - BearerAuth: [ ]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message: { type: string, example: "API OK" }
+                  ip: { type: string, example: "203.0.113.10" }
+                  country: { type: string, nullable: true, example: "Germany" }
+                  city: { type: string, nullable: true, example: "Berlin" }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/Error' }
+
+  /api/reload-tokens:
+    post:
+      summary: Перечитать токены с диска (requires Bearer)
+      tags: [ internal ]
+      security:
+        - BearerAuth: [ ]
+      responses:
+        '200':
+          description: Токены перечитаны
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: "success" }
+                  tokens_count: { type: integer, example: 2 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/Error' }
