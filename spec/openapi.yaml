@@ -1,16 +1,23 @@
 openapi: 3.0.3
 info:
   title: MP3 Joiner API
-  description: |
-    REST-интерфейс для объединения MP3-файлов.
-    Основные эндпоинты доступны по Same-Origin+CSRF или Bearer-токену.
-    Внутренние эндпоинты требуют Bearer-аутентификацию.
   version: 1.0.0
+  description: |
+    REST-сервис для объединения MP3-файлов.
+    - Публичные эндпоинты доступны по Same-Origin + CSRF **или** Bearer-токену.
+    - Внутренние эндпоинты требуют Bearer-аутентификации.
+
 servers:
   - url: https://mp3-joiner.example.com
     description: Production
   - url: http://127.0.0.1:5001
-    description: Local development
+    description: Local dev
+
+tags:
+  - name: public
+    description: Общедоступные вызовы
+  - name: internal
+    description: Служебные вызовы (Bearer)
 
 components:
   securitySchemes:
@@ -18,33 +25,11 @@ components:
       type: apiKey
       in: cookie
       name: session
-      description: Flask session cookie (Same-Origin flow)
+      description: Flask-сессия (Same-Origin)
     BearerAuth:
       type: http
       scheme: bearer
       bearerFormat: ASCII
-  responses:
-    Unauthorized:
-      description: Требуется авторизация
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/Error' }
-    Forbidden:
-      description: Неверный токен
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/Error' }
-    Error:
-      description: Ошибка сервера или клиента
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/Error' }
-    RateLimitExceeded:
-      description: Превышен лимит запросов (rate limit)
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/Error'
 
   schemas:
     Error:
@@ -52,13 +37,22 @@ components:
       properties:
         error:
           type: string
-          example: "Missing bearer token"
+          example: Missing bearer token
+
+  responses:
+    Error: { description: Ошибка,      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    Unauthorized: { $ref: '#/components/responses/Error' }
+    Forbidden: { $ref: '#/components/responses/Error' }
+    RateLimitExceeded: { $ref: '#/components/responses/Error' }
+    UnsupportedMedia: { $ref: '#/components/responses/Error' }
 
 paths:
+
   /healthz:
     get:
-      summary: Проверка статуса сервиса
       tags: [ public ]
+      summary: Проверка статуса сервиса
+      operationId: healthz
       responses:
         '200':
           description: OK
@@ -72,16 +66,15 @@ paths:
                   max_content_length_mb: { type: integer }
                   max_files: { type: integer }
                   max_per_file_mb: { type: integer }
-        '500':
-          $ref: '#/components/responses/Error'
+                  version: { type: string, example: '1.0.0' }
+        '500': { $ref: '#/components/responses/Error' }
 
   /merge:
     post:
-      summary: Объединить MP3-файлы
       tags: [ public ]
-      security:
-        - CsrfCookie: [ ]
-        - BearerAuth: [ ]
+      summary: Объединить MP3-файлы
+      operationId: merge
+      security: [ { CsrfCookie: [ ] }, { BearerAuth: [ ] } ]
       requestBody:
         required: true
         content:
@@ -92,36 +85,36 @@ paths:
               properties:
                 files:
                   type: array
-                  items:
-                    type: string
-                    format: binary
-                  description: "Один или несколько файлов .mp3"
+                  minItems: 1
+                  items: { type: string, format: binary }
                 count:
                   type: integer
                   minimum: 1
-                  description: "Число файлов для объединения в группе"
                 csrf_token:
                   type: string
-                  description: "CSRF-токен (для Same-Origin)"
       responses:
         '200':
-          description: ZIP-архив c merged_*.mp3
+          description: ZIP-архив merged_*.mp3
+          headers:
+            X-Process-Time:
+              description: Время обработки запроса (сек)
+              schema: { type: string }
           content:
             application/zip:
-              schema:
-                type: string
-                format: binary
+              schema: { type: string, format: binary }
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '413': { $ref: '#/components/responses/Error' }
+        '415': { $ref: '#/components/responses/UnsupportedMedia' }
         '429': { $ref: '#/components/responses/RateLimitExceeded' }
         '500': { $ref: '#/components/responses/Error' }
 
   /api/health:
     get:
-      summary: Техническое состояние токен/гео подсистемы
       tags: [ internal ]
+      summary: Состояние токен/гео-подсистемы
+      operationId: apiHealth
       responses:
         '200':
           description: OK
@@ -134,15 +127,14 @@ paths:
                   tokens_required: { type: boolean }
                   tokens_loaded: { type: integer }
                   geo_enabled: { type: boolean }
-        '500':
-          $ref: '#/components/responses/Error'
+        '500': { $ref: '#/components/responses/Error' }
 
   /api/test:
     get:
-      summary: Пинг, IP/Geo и авторизация
       tags: [ internal ]
-      security:
-        - BearerAuth: [ ]
+      summary: Пинг + IP/Geo
+      operationId: apiTest
+      security: [ { BearerAuth: [ ] } ]
       responses:
         '200':
           description: OK
@@ -151,29 +143,29 @@ paths:
               schema:
                 type: object
                 properties:
-                  message: { type: string, example: "API OK" }
-                  ip: { type: string, example: "203.0.113.10" }
-                  country: { type: string, nullable: true, example: "Germany" }
-                  city: { type: string, nullable: true, example: "Berlin" }
+                  message: { type: string, example: API OK }
+                  ip: { type: string, example: 203.0.113.10 }
+                  country: { type: string, nullable: true, example: Germany }
+                  city: { type: string, nullable: true, example: Berlin }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '500': { $ref: '#/components/responses/Error' }
 
   /api/reload-tokens:
     post:
-      summary: Перечитать токены с диска (requires Bearer)
       tags: [ internal ]
-      security:
-        - BearerAuth: [ ]
+      summary: Перечитать токены
+      operationId: apiReloadTokens
+      security: [ { BearerAuth: [ ] } ]
       responses:
         '200':
-          description: Токены перечитаны
+          description: Успех
           content:
             application/json:
               schema:
                 type: object
                 properties:
-                  status: { type: string, example: "success" }
+                  status: { type: string, example: success }
                   tokens_count: { type: integer, example: 2 }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
