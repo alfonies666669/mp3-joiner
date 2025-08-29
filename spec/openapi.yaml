@@ -129,28 +129,6 @@ paths:
                   geo_enabled: { type: boolean }
         '500': { $ref: '#/components/responses/Error' }
 
-  /api/test:
-    get:
-      tags: [ internal ]
-      summary: Пинг + IP/Geo
-      operationId: apiTest
-      security: [ { BearerAuth: [ ] } ]
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  message: { type: string, example: API OK }
-                  ip: { type: string, example: 203.0.113.10 }
-                  country: { type: string, nullable: true, example: Germany }
-                  city: { type: string, nullable: true, example: Berlin }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '403': { $ref: '#/components/responses/Forbidden' }
-        '500': { $ref: '#/components/responses/Error' }
-
   /api/reload-tokens:
     post:
       tags: [ internal ]

@@ -62,7 +62,7 @@ def healthz():
             {
                 "status": "ok",
                 "ffmpeg": FFMPEG_AVAILABLE,
-                "max_content_length_mb": round(MAX_CONTENT_LENGTH / (1024 * 1024), 2),
+                "max_content_length_mb": int(round(MAX_CONTENT_LENGTH / (1024 * 1024), 2)),
                 "max_files": MAX_FILES,
                 "max_per_file_mb": MAX_PER_FILE_MB,
                 "version": __version__,

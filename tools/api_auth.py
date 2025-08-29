@@ -221,22 +221,6 @@ class IPGeoTokenManager:
                 200,
             )
 
-        @bp.route("/test", methods=["GET"])
-        @self.require_api_token
-        def test_api():
-            ip, geo = self.log_visitor(log_geo=True)
-            return (
-                jsonify(
-                    {
-                        "message": "API OK",
-                        "ip": ip,
-                        "country": geo.get("country_name"),
-                        "city": geo.get("city"),
-                    }
-                ),
-                200,
-            )
-
         @bp.route("/reload-tokens", methods=["POST"])
         @self.require_api_token
         def reload_tokens():
