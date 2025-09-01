@@ -11,7 +11,7 @@
 
 **👉 Live Demo: http://mp3-joiner.ru**
 ---
-👉 [![ReDoc](https://img.shields.io/badge/ReDoc-OpenAPI-red)](https://<USER>.github.io/<REPO>/) — спецификация для клиентов, Swagger, автотестов.
+👉 [![ReDoc](https://img.shields.io/badge/ReDoc-OpenAPI-red)](https://alfonies666669.github.io/mp3-joiner/) — спецификация для клиентов, Swagger, автотестов.
 ---
 
 ## ✨ Возможности
