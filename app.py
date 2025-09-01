@@ -6,6 +6,7 @@ import shutil
 import tempfile
 
 from flask_compress import Compress
+from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 from flask import Flask, Response, jsonify, request, session, send_file, render_template, after_this_request
 
@@ -31,7 +32,7 @@ MAX_PER_FILE_MB = int(os.getenv("MAX_PER_FILE_MB", "50"))
 MAX_CONTENT_LENGTH = int(os.getenv("MAX_CONTENT_LENGTH", str(100 * 1024 * 1024)))
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
 
-TOKEN_FILE_PATH = os.getenv("TOKEN_FILE_PATH", "allowed_tokens.txt")
+TOKEN_FILE_PATH = os.getenv("TOKEN_FILE_PATH", "tokens/allowed_tokens.txt")
 app.secret_key = os.getenv("SECRET_KEY", "dev-insecure-change-me")
 ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN")
 
@@ -51,6 +52,19 @@ FFMPEG_AVAILABLE = ffmpeg_ok()
 
 # ---- Errors ----
 app.register_error_handler(413, handle_413(MAX_CONTENT_LENGTH))
+
+
+@app.errorhandler(Exception)
+def handle_errors(exc):
+    """Глобальный обработчик ошибок"""
+    if isinstance(exc, HTTPException):
+        resp = exc.get_response()
+        resp.data = jsonify({"error": exc.description}).data
+        resp.content_type = "application/json"
+        return resp
+
+    app_logger.exception("Unhandled exception", exc_info=exc)
+    return jsonify({"error": "Internal server error"}), 500
 
 
 # ---- Routes ----

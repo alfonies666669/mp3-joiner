@@ -8,8 +8,11 @@
 """
 
 from typing import Any, NamedTuple
+from collections.abc import Callable
 
 from flask import Request, Response, jsonify
+
+from logger import app_logger
 
 
 class ValidationResult(NamedTuple):
@@ -26,6 +29,21 @@ class ValidationResult(NamedTuple):
     count: int | None
     error_response: Response | None
     status_code: int | None
+
+
+def _filter_empty_files(raw: list[Any]) -> list[Any]:
+    """Убирает части без содержимого или имени файла."""
+    result: list[Any] = []
+    for part in raw:
+        if not getattr(part, "filename", "").strip():
+            app_logger.debug("skip part: empty filename")
+            continue
+        size = getattr(part, "content_length", None) or 0
+        if size == 0:
+            app_logger.debug("skip part: zero length %s", part.filename)
+            continue
+        result.append(part)
+    return result
 
 
 def _check_content_type(req: Request) -> tuple[str | None, int]:
@@ -78,53 +96,67 @@ def _check_sizes(files: list[Any], max_bytes: int) -> tuple[str | None, int]:
     return None, 400
 
 
+def _check_mp3_extension_and_size(file, max_bytes):
+    """Проверка файлов"""
+    if not file.filename.lower().endswith(".mp3"):
+        return f"File {file.filename} must have .mp3 extension"
+    if (getattr(file, "content_length", 0) or 0) == 0:
+        return f"File {file.filename} is empty"
+    if (getattr(file, "content_length", 0) or 0) > max_bytes:
+        return f"File {file.filename} is too large"
+    return None
+
+
 def validate_merge_request(
     req: Request,
     max_files: int,
     max_per_file_mb: int,
     ffmpeg_available: bool,
-    check_files_are_mp3_fn,
+    check_files_are_mp3_fn: Callable[[list[Any]], tuple[dict, int] | None],
 ) -> ValidationResult:
-    """Комплексная валидация запроса для /merge.
+    """Возвращает ValidationResult с error_response=None, если ошибок нет."""
 
-    Последовательно выполняет проверки:
-      1) Content-Type;
-      2) наличие файлов и корректность count;
-      3) доступность FFmpeg;
-      4) ограничение размера каждого файла;
-      5) проверка, что каждый файл — валидный MP3.
+    files: list[Any] | None = None
+    count: int | None = None
+    error: str | None = None
+    code: int | None = None
 
-    :return: ValidationResult:
-            - при успехе: (files, count, None, None)
-            - при ошибке: (None, None, jsonify({...}), http_code)
-    """
-    # 1. Content-Type
-    error_msg, error_code = _check_content_type(req)
-    if error_msg:
-        return ValidationResult(None, None, jsonify({"error": error_msg}), error_code)
+    # 1) Content-Type
+    if error is None:
+        error, code = _check_content_type(req)
 
-    # 2. Files + count
-    files = req.files.getlist("files")
-    count = req.form.get("count", type=int)
+    # 2) files + count
+    if error is None:
+        raw = req.files.getlist("files")
+        files = _filter_empty_files(raw)
+        if not files:
+            error, code = "No files provided", 400
+        else:
+            count = req.form.get("count", type=int)
+            error, code = _check_files_and_count(files, count, max_files)
 
-    error_msg, error_code = _check_files_and_count(files, count, max_files)
-    if error_msg:
-        return ValidationResult(None, None, jsonify({"error": error_msg}), error_code)
+    # 3) FFmpeg
+    if error is None and not ffmpeg_available:
+        error, code = "FFmpeg is not available in runtime", 500
 
-    # 3. FFmpeg
-    if not ffmpeg_available:
-        return ValidationResult(None, None, jsonify({"error": "FFmpeg is not available in runtime"}), 500)
+    # 4) размеры и расширение
+    if error is None:
+        max_bytes = max_per_file_mb * 1024 * 1024
+        for f in files:  # type: ignore[arg-type]
+            err = _check_mp3_extension_and_size(f, max_bytes)
+            if err:
+                error, code = err, 400
+                break
+        if error is None:
+            error, code = _check_sizes(files, max_bytes)  # type: ignore[arg-type]
 
-    # 4. Size check
-    max_bytes = max_per_file_mb * 1024 * 1024
-    error_msg, error_code = _check_sizes(files, max_bytes)
-    if error_msg:
-        return ValidationResult(None, None, jsonify({"error": error_msg}), error_code)
+    # 5) mp3-валидность
+    if error is None:
+        mp3_err = check_files_are_mp3_fn(files)  # type: ignore[arg-type]
+        if mp3_err:
+            error, code = mp3_err[0]["error"], mp3_err[1]
 
-    # 5. MP3 check
-    mp3_error = check_files_are_mp3_fn(files)
-    if mp3_error:
-        return ValidationResult(None, None, jsonify(mp3_error[0]), mp3_error[1])
+    if error is not None:
+        return ValidationResult(None, None, jsonify({"error": error}), code)  # type: ignore[arg-type]
 
-    # OK
-    return ValidationResult(files, count, None, None)
+    return ValidationResult(files, count, None, None)  # type: ignore[arg-type]
