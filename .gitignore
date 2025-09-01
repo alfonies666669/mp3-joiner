@@ -35,6 +35,7 @@ build/
 .env
 .env.local
 .env.production
+.hypothesis
 
 # Tokens (if sensitive)
 /tokens/
