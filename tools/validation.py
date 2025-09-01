@@ -8,7 +8,6 @@
 """
 
 from typing import Any, NamedTuple
-from collections.abc import Callable
 
 from flask import Request, Response, jsonify
 
@@ -112,7 +111,7 @@ def validate_merge_request(
     max_files: int,
     max_per_file_mb: int,
     ffmpeg_available: bool,
-    check_files_are_mp3_fn: Callable[None | tuple],
+    check_files_are_mp3_fn,
 ) -> ValidationResult:
     """Возвращает ValidationResult с error_response=None, если ошибок нет."""
 
