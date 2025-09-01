@@ -6,6 +6,7 @@ import shutil
 import tempfile
 
 from flask_compress import Compress
+from werkzeug.exceptions import HTTPException
 from werkzeug.middleware.proxy_fix import ProxyFix
 from flask import Flask, Response, jsonify, request, session, send_file, render_template, after_this_request
 
@@ -31,7 +32,7 @@ MAX_PER_FILE_MB = int(os.getenv("MAX_PER_FILE_MB", "50"))
 MAX_CONTENT_LENGTH = int(os.getenv("MAX_CONTENT_LENGTH", str(100 * 1024 * 1024)))
 app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
 
-TOKEN_FILE_PATH = os.getenv("TOKEN_FILE_PATH", "allowed_tokens.txt")
+TOKEN_FILE_PATH = os.getenv("TOKEN_FILE_PATH", "tokens/allowed_tokens.txt")
 app.secret_key = os.getenv("SECRET_KEY", "dev-insecure-change-me")
 ALLOWED_ORIGIN = os.getenv("ALLOWED_ORIGIN")
 
@@ -53,6 +54,19 @@ FFMPEG_AVAILABLE = ffmpeg_ok()
 app.register_error_handler(413, handle_413(MAX_CONTENT_LENGTH))
 
 
+@app.errorhandler(Exception)
+def handle_errors(exc):
+    """Глобальный обработчик ошибок"""
+    if isinstance(exc, HTTPException):
+        resp = exc.get_response()
+        resp.data = jsonify({"error": exc.description}).data
+        resp.content_type = "application/json"
+        return resp
+
+    app_logger.exception("Unhandled exception", exc_info=exc)
+    return jsonify({"error": "Internal server error"}), 500
+
+
 # ---- Routes ----
 @app.route("/healthz", methods=["GET"])
 def healthz():
@@ -62,7 +76,7 @@ def healthz():
             {
                 "status": "ok",
                 "ffmpeg": FFMPEG_AVAILABLE,
-                "max_content_length_mb": round(MAX_CONTENT_LENGTH / (1024 * 1024), 2),
+                "max_content_length_mb": int(round(MAX_CONTENT_LENGTH / (1024 * 1024), 2)),
                 "max_files": MAX_FILES,
                 "max_per_file_mb": MAX_PER_FILE_MB,
                 "version": __version__,
@@ -172,4 +186,4 @@ def merge_files():  # pylint: disable=too-many-locals
 if __name__ == "__main__":
     app_logger.info("Starting mp3-joiner %s", __version__)
     port = int(os.environ.get("PORT", "5001"))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=port, debug=False)

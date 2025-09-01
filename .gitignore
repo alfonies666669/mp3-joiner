@@ -1,15 +1,49 @@
+# OS
 .DS_Store
-__pycache__/
+Thumbs.db
+desktop.ini
+
+# Editors
 *.idea
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
 *.py[cod]
 *.pyo
+*.pyc
+*.egg-info/
+.Python
+pip-log.txt
 .venv/
 .mypy_cache/
 .ruff_cache/
 .pytest_cache/
 .coverage
+
+# Build
 dist/
 build/
-*logs
-/tokens
-EOF
+
+# Logs
+/logs/
+*.log
+
+# Environment
+.env
+.env.local
+.env.production
+.hypothesis
+
+# Tokens (if sensitive)
+/tokens/
+/tokens/*
+
+# Temporary files
+*~
+
+# Coverage
+.coverage
+.htmlcov/

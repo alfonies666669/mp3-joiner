@@ -1,0 +1,150 @@
+openapi: 3.0.3
+info:
+  title: MP3 Joiner API
+  version: 1.0.0
+  description: |
+    REST-сервис для объединения MP3-файлов.
+    - Публичные эндпоинты доступны по Same-Origin + CSRF **или** Bearer-токену.
+    - Внутренние эндпоинты требуют Bearer-аутентификации.
+
+servers:
+  - url: https://mp3-joiner.example.com
+    description: Production
+  - url: http://127.0.0.1:5001
+    description: Local dev
+
+tags:
+  - name: public
+    description: Общедоступные вызовы
+  - name: internal
+    description: Служебные вызовы (Bearer)
+
+components:
+  securitySchemes:
+    CsrfCookie:
+      type: apiKey
+      in: cookie
+      name: session
+      description: Flask-сессия (Same-Origin)
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: ASCII
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Missing bearer token
+
+  responses:
+    Error: { description: Ошибка,      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } } }
+    Unauthorized: { $ref: '#/components/responses/Error' }
+    Forbidden: { $ref: '#/components/responses/Error' }
+    RateLimitExceeded: { $ref: '#/components/responses/Error' }
+    UnsupportedMedia: { $ref: '#/components/responses/Error' }
+
+paths:
+
+  /healthz:
+    get:
+      tags: [ public ]
+      summary: Проверка статуса сервиса
+      operationId: healthz
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  ffmpeg: { type: boolean }
+                  max_content_length_mb: { type: integer }
+                  max_files: { type: integer }
+                  max_per_file_mb: { type: integer }
+                  version: { type: string, example: '1.0.0' }
+        '500': { $ref: '#/components/responses/Error' }
+
+  /merge:
+    post:
+      tags: [ public ]
+      summary: Объединить MP3-файлы
+      operationId: merge
+      security: [ { CsrfCookie: [ ] }, { BearerAuth: [ ] } ]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [ files, count ]
+              properties:
+                files:
+                  type: array
+                  minItems: 1
+                  items: { type: string, format: binary }
+                count:
+                  type: integer
+                  minimum: 1
+                csrf_token:
+                  type: string
+      responses:
+        '200':
+          description: ZIP-архив merged_*.mp3
+          headers:
+            X-Process-Time:
+              description: Время обработки запроса (сек)
+              schema: { type: string }
+          content:
+            application/zip:
+              schema: { type: string, format: binary }
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '413': { $ref: '#/components/responses/Error' }
+        '415': { $ref: '#/components/responses/UnsupportedMedia' }
+        '429': { $ref: '#/components/responses/RateLimitExceeded' }
+        '500': { $ref: '#/components/responses/Error' }
+
+  /api/health:
+    get:
+      tags: [ internal ]
+      summary: Состояние токен/гео-подсистемы
+      operationId: apiHealth
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: ok }
+                  tokens_required: { type: boolean }
+                  tokens_loaded: { type: integer }
+                  geo_enabled: { type: boolean }
+        '500': { $ref: '#/components/responses/Error' }
+
+  /api/reload-tokens:
+    post:
+      tags: [ internal ]
+      summary: Перечитать токены
+      operationId: apiReloadTokens
+      security: [ { BearerAuth: [ ] } ]
+      responses:
+        '200':
+          description: Успех
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: success }
+                  tokens_count: { type: integer, example: 2 }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '500': { $ref: '#/components/responses/Error' }

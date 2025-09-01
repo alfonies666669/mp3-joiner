@@ -6,6 +6,7 @@
 """
 
 import io
+from io import BytesIO
 from types import SimpleNamespace
 
 import pytest
@@ -17,9 +18,9 @@ from tools.validation import _check_sizes, _check_content_type, _check_files_and
 # ---------- helpers ----------
 
 
-def _file_part(name: str, payload: bytes = b"ID3\x00\x00\x00aaaa") -> tuple[io.BytesIO, str]:
-    """Возвращает кортеж для multipart-поля файла: (stream, filename)."""
-    return io.BytesIO(payload), name
+def _file_part(name: str, data: bytes = b"X"):
+    """Возвращает FileStorage с заданным содержимым (по умолчанию 1 байт)."""
+    return FileStorage(stream=BytesIO(data), filename=name, content_type="audio/mpeg")
 
 
 def _fs(name: str, payload: bytes = b"ID3\x00\x00\x00aaaa") -> FileStorage:
@@ -78,9 +79,9 @@ def test__check_sizes_too_large():
 
 def test__check_sizes_ok():
     """Все файлы не превышают лимит — ошибок нет."""
-    f = _fs("a.mp3")
+    f = _fs("a.mp3")  # helper из фикстур
     msg, code = _check_sizes([f], 50 * 1024 * 1024)
-    assert msg is None and code == 400
+    assert msg is None and code is None
 
 
 # ---------- интеграционные тесты validate_merge_request ----------

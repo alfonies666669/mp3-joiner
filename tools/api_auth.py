@@ -147,13 +147,23 @@ class IPGeoTokenManager:
             return None
         return auth.replace("Bearer ", "", 1).strip()
 
+    @staticmethod
+    def _safe_cmp(a: str | bytes, b: str | bytes) -> bool:
+        """Константное сравнение, не зависящее от кодировки."""
+        if isinstance(a, str):
+            a = a.encode("utf-8", errors="surrogatepass")
+        if isinstance(b, str):
+            b = b.encode("utf-8", errors="surrogatepass")
+        return hmac.compare_digest(a, b)
+
     def is_valid_token(self, token: str | None) -> bool:
-        """Проверяет валидность токена. При отключённой аутентификации всегда True; иначе — сравнение с allow-листом."""
+        """Возвращает True, если токен валиден (или проверка выключена)."""
         if not self.tokens_required:
-            return True  # auth disabled
+            return True  # авторизация отключена
         if not token:
-            return False
-        return any(hmac.compare_digest(t, token) for t in self.allowed_tokens)
+            return False  # токен не передан
+
+        return any(self._safe_cmp(stored, token) for stored in self.allowed_tokens)
 
     def require_api_token(self, f):
         """Flask-декоратор: требует валидный Bearer-токен. Иначе 401/403 и логирование причины."""
@@ -216,22 +226,6 @@ class IPGeoTokenManager:
                         "tokens_required": self.tokens_required,
                         "tokens_loaded": len(self.allowed_tokens),
                         "geo_enabled": self.geo_enabled,
-                    }
-                ),
-                200,
-            )
-
-        @bp.route("/test", methods=["GET"])
-        @self.require_api_token
-        def test_api():
-            ip, geo = self.log_visitor(log_geo=True)
-            return (
-                jsonify(
-                    {
-                        "message": "API OK",
-                        "ip": ip,
-                        "country": geo.get("country_name"),
-                        "city": geo.get("city"),
                     }
                 ),
                 200,
