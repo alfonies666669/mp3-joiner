@@ -6,11 +6,12 @@
 [![Docker](https://img.shields.io/badge/docker-ghcr.io%2Falfonies666669%2Fmp3--joiner-blue)](https://github.com/alfonies666669/mp3-joiner/pkgs/container/mp3-joiner)
 
 **MP3 Joiner** — это production-ready веб-приложение для объединения MP3-файлов.
-Написано на **Python (Flask)**, использует **FFmpeg**, упаковано в Docker и раскатывается на VPS через **GitHub Actions**.
+Написано на **Python (Flask)**, использует **FFmpeg**, упаковано в Docker и раскатывается на VPS через **GitHub Actions
+**.
 
 **👉 Live Demo: http://mp3-joiner.ru**
 ---
-👉 [API docs (OpenAPI 3.0)](docs/spec/openapi.yaml) — спецификация для клиентов, Swagger, автотестов.
+👉 [![ReDoc](https://img.shields.io/badge/ReDoc-OpenAPI-red)](https://<USER>.github.io/<REPO>/) — спецификация для клиентов, Swagger, автотестов.
 ---
 
 ## ✨ Возможности
@@ -24,8 +25,8 @@
 - (Опционально) Geo-lookup по IP.
 - Healthcheck endpoint `/healthz`.
 - Логирование:
-  - `app.log` (ротирующий логгер)
-  - JSON-логи пользовательских действий.
+    - `app.log` (ротирующий логгер)
+    - JSON-логи пользовательских действий.
 - CI/CD пайплайн (тесты, линтеры, автодеплой).
 
 ---
@@ -56,19 +57,25 @@ docker run -d \
   --name mp3-joiner \
   ghcr.io/alfonies666669/mp3-joiner:latest
 ```
+
 Перейти на:
+
    ```
    http://127.0.0.1:5001
    ```
 
 ---
+
 ### 2. docker-compose.prod.yml
+
 ```bash
 TAG=latest docker compose -f docker-compose.prod.yml up -d
 ```
 
 ---
+
 ### 3. Локально (dev)
+
 ```bash
 git clone https://github.com/alfonies666669/mp3-joiner.git
 cd mp3-joiner
@@ -79,7 +86,9 @@ make run
 ```
 
 ---
+
 ## CI/CD
+
 - CI (ci.yml): pytest + coverage, black + isort + pylint, docker build & smoke test.
 - Release Drafter: автогенерация changelog.
 - Deploy (deploy.yml):
@@ -87,7 +96,9 @@ make run
 - Pull нового образа
 - docker compose up -d на VPS
 - Любой тег vX.Y.Z = релиз + новый Docker-образ.
+
 ---
+
 ## Использование
 
 	1.	Перейти на /.
@@ -100,12 +111,12 @@ make run
 
 ## Roadmap
 
--	Поддержка WAV/OGG
--	Прогресс-бар загрузки и обработки
--	Drag-and-drop интерфейс
--	Авторизация (OAuth2)
--	Интеграция с облаками (GDrive/YandexDisk)
--	E2E-тесты (Playwright)
+- Поддержка WAV/OGG
+- Прогресс-бар загрузки и обработки
+- Drag-and-drop интерфейс
+- Авторизация (OAuth2)
+- Интеграция с облаками (GDrive/YandexDisk)
+- E2E-тесты (Playwright)
 
 ---
 
