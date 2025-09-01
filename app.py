@@ -186,4 +186,4 @@ def merge_files():  # pylint: disable=too-many-locals
 if __name__ == "__main__":
     app_logger.info("Starting mp3-joiner %s", __version__)
     port = int(os.environ.get("PORT", "5001"))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    app.run(host="0.0.0.0", port=port, debug=False)

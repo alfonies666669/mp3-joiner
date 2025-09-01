@@ -7,11 +7,12 @@
 - validate_merge_request: координирует все проверки и формирует единый результат.
 """
 
+import os
 from typing import Any, NamedTuple
+from collections.abc import Iterable
 
 from flask import Request, Response, jsonify
-
-from logger import app_logger
+from werkzeug.datastructures import FileStorage
 
 
 class ValidationResult(NamedTuple):
@@ -30,19 +31,20 @@ class ValidationResult(NamedTuple):
     status_code: int | None
 
 
-def _filter_empty_files(raw: list[Any]) -> list[Any]:
-    """Убирает части без содержимого или имени файла."""
-    result: list[Any] = []
-    for part in raw:
-        if not getattr(part, "filename", "").strip():
-            app_logger.debug("skip part: empty filename")
+def _filter_empty_files(files: Iterable[Any]) -> list[FileStorage]:
+    """
+    Оставляем только реальные файлы с непустым именем.
+    Содержимое (длина) здесь не проверяем – это делается
+    дальше в validate_merge_request в «Size check».
+    """
+    filtered: list[FileStorage] = []
+    for f in files:
+        if not f:
             continue
-        size = getattr(part, "content_length", None) or 0
-        if size == 0:
-            app_logger.debug("skip part: zero length %s", part.filename)
-            continue
-        result.append(part)
-    return result
+        name = getattr(f, "filename", "").strip()
+        if name:
+            filtered.append(f)
+    return filtered
 
 
 def _check_content_type(req: Request) -> tuple[str | None, int]:
@@ -79,30 +81,43 @@ def _check_files_and_count(files: list[Any], count: int | None, max_files: int) 
     return None, 400
 
 
-def _check_sizes(files: list[Any], max_bytes: int) -> tuple[str | None, int]:
+def _check_sizes(files: list[Any], max_bytes: int) -> tuple[str, int] | tuple[None, None]:
     """Проверяет, что каждый файл не превышает заданный размер.
 
     :param files: Список объектов FileStorage.
     :param max_bytes: Максимально допустимый размер одного файла в байтах.
     :return: (сообщение_об_ошибке | None, http_код). Если всё ок — (None, 400).
     """
-    too_large = next(
-        (f for f in files if (getattr(f, "content_length", None) or 0) > max_bytes),
-        None,
-    )
+    too_large = next((f for f in files if _file_size(f) > max_bytes), None)
     if too_large:
         return f"File '{too_large.filename}' is too large (> {max_bytes // (1024 * 1024)} MB)", 400
-    return None, 400
+    return None, None
 
 
-def _check_mp3_extension_and_size(file, max_bytes):
+def _file_size(f: FileStorage) -> int:
+    """Возвращает размер файла в байтах.
+    - Если `content_length` указан — пользуемся им.
+    - Иначе аккуратно измеряем длину stream'а (с сохранением позиции курсора)."""
+    if getattr(f, "content_length", None):
+        return int(f.content_length)
+
+    pos = f.stream.tell()
+    f.stream.seek(0, os.SEEK_END)
+    size = f.stream.tell()
+    f.stream.seek(pos)
+    return size
+
+
+def _check_mp3_extension_and_size(f: FileStorage, max_bytes: int) -> str | None:
     """Проверка файлов"""
-    if not file.filename.lower().endswith(".mp3"):
-        return f"File {file.filename} must have .mp3 extension"
-    if (getattr(file, "content_length", 0) or 0) == 0:
-        return f"File {file.filename} is empty"
-    if (getattr(file, "content_length", 0) or 0) > max_bytes:
-        return f"File {file.filename} is too large"
+    if not f.filename.lower().endswith(".mp3"):
+        return "File must have .mp3 extension"
+
+    size = _file_size(f)
+    if size == 0:
+        return f"File {f.filename} is empty"
+    if size > max_bytes:
+        return f"File {f.filename} is too large (> {max_bytes // (1024 * 1024)} MB)"
     return None
 
 
@@ -138,7 +153,13 @@ def validate_merge_request(
     if error is None and not ffmpeg_available:
         error, code = "FFmpeg is not available in runtime", 500
 
-    # 4) размеры и расширение
+    # 4) mp3-валидность
+    if error is None:
+        mp3_err = check_files_are_mp3_fn(files)  # type: ignore[arg-type]
+        if mp3_err:
+            error, code = mp3_err[0]["error"], mp3_err[1]
+
+    # 5) размеры и расширение
     if error is None:
         max_bytes = max_per_file_mb * 1024 * 1024
         for f in files:  # type: ignore[arg-type]
@@ -148,12 +169,6 @@ def validate_merge_request(
                 break
         if error is None:
             error, code = _check_sizes(files, max_bytes)  # type: ignore[arg-type]
-
-    # 5) mp3-валидность
-    if error is None:
-        mp3_err = check_files_are_mp3_fn(files)  # type: ignore[arg-type]
-        if mp3_err:
-            error, code = mp3_err[0]["error"], mp3_err[1]
 
     if error is not None:
         return ValidationResult(None, None, jsonify({"error": error}), code)  # type: ignore[arg-type]

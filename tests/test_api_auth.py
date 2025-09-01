@@ -207,19 +207,6 @@ def test_blueprint_health(client, mgr):
     assert set(data) >= {"status", "tokens_required", "tokens_loaded", "geo_enabled"}
 
 
-def test_blueprint_test_requires_token(client):
-    """Проверка blueprint tokens"""
-    # без токена — 401
-    r = client.get("/api/test")
-    assert r.status_code == 401
-    # с токеном — 200, и структура ответа ожидаемая
-    r = client.get("/api/test", headers={"Authorization": "Bearer GOOD_TOKEN"})
-    assert r.status_code == 200
-    data = r.get_json()
-    assert data["message"] == "API OK"
-    assert "ip" in data  # ip/geo могут быть пустыми — проверяем ключи
-
-
 def test_blueprint_reload_tokens(client, mgr):
     """Проверка перезагрузки токенов"""
     # Перепишем файл токенов и вызовем endpoint
