@@ -88,7 +88,9 @@ def auth_bearer_or_same_origin_csrf(token_manager, allowed_origin: str | None) -
             auth = request.headers.get("Authorization", "")
             if auth.startswith("Bearer "):
                 token = auth.replace("Bearer ", "", 1).strip()
-                if token_manager and not token_manager.is_valid_token(token):
+                if token_manager is None:
+                    return jsonify({"error": "Forbidden"}), 403
+                if not token_manager.is_valid_token(token):
                     return jsonify({"error": "Forbidden"}), 403
                 return f(*args, **kwargs)
 
